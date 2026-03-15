@@ -1,0 +1,20 @@
+# CI container for julep-renderer
+# Build: podman build -t julep-renderer-ci:latest -f Containerfile.ci .
+
+FROM node:18-bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    curl \
+    ca-certificates \
+    pkg-config \
+    cmake \
+    libxkbcommon-dev \
+    libwayland-dev \
+    libx11-dev \
+    libfontconfig1-dev \
+    libfreetype-dev \
+    && rm -rf /var/lib/apt/lists/*

@@ -181,8 +181,8 @@ impl Core {
                 log::debug!("settings received");
 
                 // Protocol version check
-                if let Some(v) = settings.get("protocol_version").and_then(|v| v.as_str()) {
-                    if v != crate::protocol::PROTOCOL_VERSION {
+                if let Some(v) = settings.get("protocol_version").and_then(|v| v.as_u64()) {
+                    if v != u64::from(crate::protocol::PROTOCOL_VERSION) {
                         log::warn!(
                             "protocol version mismatch: expected {}, got {}",
                             crate::protocol::PROTOCOL_VERSION,

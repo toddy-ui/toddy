@@ -1,0 +1,253 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+# See lines-on-glass/.forgejo/workflows/ci.yml for detailed cache strategy
+# documentation. This workflow uses the same reflink-based approach.
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+  BINSTALL_DISABLE_TELEMETRY: true
+  CARGO_HOME: /cache/cargo
+  RUSTUP_HOME: /cache/rustup
+  MISE_DATA_DIR: /cache/mise/data
+  MISE_CACHE_DIR: /cache/mise/cache
+  REPO: ${{ github.repository }}
+  SHA: ${{ github.sha }}
+
+jobs:
+  ci:
+    name: CI
+    runs-on: docker
+    container:
+      image: git.lincracy.internal/lincracy/julep-renderer-ci:latest
+    steps:
+      - name: Checkout
+        run: |
+          set -e
+          REPO_NAME="${REPO##*/}"
+          WORKDIR="/cache/workdirs/$REPO_NAME-$SHA-$$-$RANDOM"
+          echo "WORKDIR=$WORKDIR" >> "$GITHUB_ENV"
+          echo "REPO_NAME=$REPO_NAME" >> "$GITHUB_ENV"
+
+          echo ""
+          echo "========================================"
+          echo "=== Setup workdir ==="
+          echo "========================================"
+          echo "Repository: $REPO_NAME"
+          echo "SHA: $SHA"
+          echo "Workdir: $WORKDIR"
+
+          git config --global credential.helper store
+          echo "https://token:${{ github.token }}@${GITHUB_SERVER_URL#https://}" > ~/.git-credentials
+
+          echo ""
+          echo "Walking commit history to find cached build..."
+          TEMP_CLONE="/tmp/cache-lookup-$$"
+          git clone --bare "$GITHUB_SERVER_URL/$REPO.git" "$TEMP_CLONE" 2>/dev/null || true
+
+          CACHE_SOURCE=""
+          if [ -d "$TEMP_CLONE" ]; then
+            for ancestor in $(git -C "$TEMP_CLONE" log --format=%H -n 500 "$SHA" 2>/dev/null); do
+              if [ -f "/cache/builds/$REPO_NAME/$ancestor/.complete" ]; then
+                CACHE_SOURCE="/cache/builds/$REPO_NAME/$ancestor"
+                echo "Found cache at: $CACHE_SOURCE (commit $ancestor)"
+                break
+              fi
+            done
+            rm -rf "$TEMP_CLONE"
+          fi
+
+          mkdir -p "/cache/workdirs"
+          if [ -z "$CACHE_SOURCE" ]; then
+            echo "No cache found, starting fresh"
+            mkdir -p "$WORKDIR"
+          else
+            echo "Copying cache with reflink..."
+            cp -a --reflink=auto "$CACHE_SOURCE" "$WORKDIR"
+            rm -f "$WORKDIR/.complete"
+            echo "Cache restored to workdir"
+          fi
+
+          echo ""
+          echo "========================================"
+          echo "=== Git checkout ==="
+          echo "========================================"
+          cd "$WORKDIR"
+
+          if [ -d .git ]; then
+            echo "Git repo exists, fetching and resetting..."
+            git fetch origin
+            git checkout -f "$SHA"
+            git reset --hard "$SHA"
+            git clean -fd
+          else
+            echo "Cloning fresh..."
+            git clone "$GITHUB_SERVER_URL/$REPO.git" .
+            git checkout "$SHA"
+          fi
+
+          git log -1 --oneline
+
+      - name: Setup tools
+        run: |
+          set -e
+          cd "$WORKDIR"
+          MAX_AGE_DAYS=7
+
+          echo ""
+          echo "========================================"
+          echo "=== mise ==="
+          echo "========================================"
+          MISE_BIN="/cache/mise/bin/mise"
+          if [ ! -x "$MISE_BIN" ] || find "$MISE_BIN" -mtime +$MAX_AGE_DAYS | grep -q .; then
+            echo "Installing/updating mise..."
+            mkdir -p /cache/mise/bin
+            curl -fsSL https://mise.run | MISE_INSTALL_PATH="$MISE_BIN" sh
+          else
+            echo "Using cached mise (less than $MAX_AGE_DAYS days old)"
+          fi
+          echo "/cache/mise/bin" >> "$GITHUB_PATH"
+          export PATH="/cache/mise/bin:$PATH"
+          eval "$($MISE_BIN activate bash)"
+          mise install --yes
+          mise list
+
+          echo ""
+          echo "========================================"
+          echo "=== cargo-binstall ==="
+          echo "========================================"
+          BINSTALL_BIN="$CARGO_HOME/bin/cargo-binstall"
+          if [ ! -x "$BINSTALL_BIN" ] || find "$BINSTALL_BIN" -mtime +$MAX_AGE_DAYS | grep -q .; then
+            echo "Installing/updating cargo-binstall..."
+            curl -L --proto '=https' --tlsv1.2 -sSf \
+              https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          else
+            echo "Using cached binstall (less than $MAX_AGE_DAYS days old)"
+          fi
+          "$BINSTALL_BIN" -V
+
+          echo ""
+          echo "========================================"
+          echo "=== just ==="
+          echo "========================================"
+          JUST_BIN="$CARGO_HOME/bin/just"
+          if [ ! -x "$JUST_BIN" ] || find "$JUST_BIN" -mtime +$MAX_AGE_DAYS | grep -q .; then
+            echo "Installing/updating just..."
+            "$BINSTALL_BIN" just --secure --no-confirm
+          else
+            echo "Using cached just (less than $MAX_AGE_DAYS days old)"
+          fi
+          "$JUST_BIN" --version
+
+          echo ""
+          echo "========================================"
+          echo "=== cargo-nextest ==="
+          echo "========================================"
+          NEXTEST_BIN="$CARGO_HOME/bin/cargo-nextest"
+          if [ ! -x "$NEXTEST_BIN" ] || find "$NEXTEST_BIN" -mtime +$MAX_AGE_DAYS | grep -q .; then
+            echo "Installing/updating cargo-nextest..."
+            "$BINSTALL_BIN" cargo-nextest --secure --no-confirm
+          else
+            echo "Using cached nextest (less than $MAX_AGE_DAYS days old)"
+          fi
+          "$NEXTEST_BIN" --version
+
+          echo ""
+          echo "========================================"
+          echo "=== Setup complete ==="
+          echo "========================================"
+
+      - name: Check
+        id: check
+        continue-on-error: true
+        run: |
+          set -e
+          cd "$WORKDIR"
+          export PATH="$CARGO_HOME/bin:/cache/mise/bin:$PATH"
+          eval "$(mise activate bash)"
+          just check
+
+      - name: Clippy
+        id: clippy
+        continue-on-error: true
+        run: |
+          set -e
+          cd "$WORKDIR"
+          export PATH="$CARGO_HOME/bin:/cache/mise/bin:$PATH"
+          eval "$(mise activate bash)"
+          just clippy
+
+      - name: Format
+        id: fmt
+        continue-on-error: true
+        run: |
+          set -e
+          cd "$WORKDIR"
+          export PATH="$CARGO_HOME/bin:/cache/mise/bin:$PATH"
+          eval "$(mise activate bash)"
+          just fmt
+
+      - name: Test
+        id: test
+        continue-on-error: true
+        run: |
+          set -e
+          cd "$WORKDIR"
+          export PATH="$CARGO_HOME/bin:/cache/mise/bin:$PATH"
+          eval "$(mise activate bash)"
+          just test
+
+      - name: Finalize
+        if: always()
+        run: |
+          set -e
+
+          echo ""
+          echo "========================================"
+          echo "=== Save cache ==="
+          echo "========================================"
+          echo "Workdir: $WORKDIR"
+          BUILD_CACHE="/cache/builds/$REPO_NAME/$SHA"
+          echo "Saving cache to $BUILD_CACHE"
+          rm -rf "$BUILD_CACHE"
+          mkdir -p "/cache/builds/$REPO_NAME"
+          mv "$WORKDIR" "$BUILD_CACHE"
+          touch "$BUILD_CACHE/.complete"
+          echo "Cache saved successfully"
+
+          echo ""
+          echo "========================================"
+          echo "=== Results ==="
+          echo "========================================"
+          echo "Check:   ${{ steps.check.outcome }}"
+          echo "Clippy:  ${{ steps.clippy.outcome }}"
+          echo "Format:  ${{ steps.fmt.outcome }}"
+          echo "Test:    ${{ steps.test.outcome }}"
+
+          FAILED=""
+          if [ "${{ steps.check.outcome }}" = "failure" ]; then
+            FAILED="$FAILED check"
+          fi
+          if [ "${{ steps.clippy.outcome }}" = "failure" ]; then
+            FAILED="$FAILED clippy"
+          fi
+          if [ "${{ steps.fmt.outcome }}" = "failure" ]; then
+            FAILED="$FAILED fmt"
+          fi
+          if [ "${{ steps.test.outcome }}" = "failure" ]; then
+            FAILED="$FAILED test"
+          fi
+
+          if [ -n "$FAILED" ]; then
+            echo ""
+            echo "FAILED:$FAILED"
+            exit 1
+          fi
+
+          echo ""
+          echo "All checks passed!"

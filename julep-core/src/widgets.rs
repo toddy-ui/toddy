@@ -5156,8 +5156,8 @@ mod tests {
     #[test]
     fn prop_bool_default_uses_fallback() {
         let v = json!({});
-        assert_eq!(prop_bool_default(make_props(&v), "clip", true), true);
-        assert_eq!(prop_bool_default(make_props(&v), "clip", false), false);
+        assert!(prop_bool_default(make_props(&v), "clip", true));
+        assert!(!prop_bool_default(make_props(&v), "clip", false));
     }
 
     // -- prop_str --
@@ -5710,7 +5710,7 @@ mod tests {
     #[cfg(feature = "widget-canvas")]
     #[test]
     fn collect_clipped_shapes_simple() {
-        let shapes = vec![
+        let shapes = [
             json!({"type": "rect", "x": 0, "y": 0, "w": 50, "h": 50}),
             json!({"type": "pop_clip"}),
         ];
@@ -5727,7 +5727,7 @@ mod tests {
     #[cfg(feature = "widget-canvas")]
     #[test]
     fn collect_clipped_shapes_nested() {
-        let shapes = vec![
+        let shapes = [
             json!({"type": "push_clip", "x": 10, "y": 10, "w": 50, "h": 50}),
             json!({"type": "rect", "x": 0, "y": 0, "w": 20, "h": 20}),
             json!({"type": "pop_clip"}),
@@ -5745,7 +5745,7 @@ mod tests {
     #[cfg(feature = "widget-canvas")]
     #[test]
     fn collect_clipped_shapes_no_pop() {
-        let shapes = vec![json!({"type": "rect", "x": 0, "y": 0, "w": 50, "h": 50})];
+        let shapes = [json!({"type": "rect", "x": 0, "y": 0, "w": 50, "h": 50})];
         let refs: Vec<&Value> = shapes.iter().collect();
         let (end_idx, collected) = collect_clipped_shapes(&refs);
         // No pop_clip found -- returns all shapes

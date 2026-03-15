@@ -1,0 +1,10 @@
+[profile.default]
+slow-timeout = "15s"
+status-level = "fail"
+final-status-level = "fail"
+failure-output = "immediate-final"
+success-output = "never"
+
+[profile.ci]
+inherits = "default"
+fail-fast = false

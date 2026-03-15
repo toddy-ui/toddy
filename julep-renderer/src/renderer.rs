@@ -2389,6 +2389,34 @@ fn emit_event(event: OutgoingEvent) {
 }
 
 // ---------------------------------------------------------------------------
+// stdout hello message emitter
+// ---------------------------------------------------------------------------
+
+/// Emit a `hello` handshake message to stdout immediately after codec
+/// negotiation. This tells the Elixir side which protocol version and
+/// renderer build it is talking to.
+pub(crate) fn emit_hello() {
+    let msg = serde_json::json!({
+        "type": "hello",
+        "protocol": julep_core::protocol::PROTOCOL_VERSION,
+        "version": env!("CARGO_PKG_VERSION"),
+        "name": "julep-renderer",
+    });
+    let codec = Codec::get_global();
+    match codec.encode(&msg) {
+        Ok(bytes) => {
+            let stdout = io::stdout();
+            let mut handle = stdout.lock();
+            if let Err(e) = handle.write_all(&bytes) {
+                log::error!("failed to write hello to stdout: {e}");
+            }
+            let _ = handle.flush();
+        }
+        Err(e) => log::error!("failed to serialize hello: {e}"),
+    }
+}
+
+// ---------------------------------------------------------------------------
 // stdout effect response emitter
 // ---------------------------------------------------------------------------
 
@@ -2812,6 +2840,10 @@ pub(crate) fn run(builder: julep_core::app::JulepAppBuilder) -> iced::Result {
     // data before the daemon starts. This must happen before the stdin
     // reader thread is spawned.
     let (initial_settings, iced_settings, font_bytes, reader) = read_initial_settings(forced_codec);
+
+    // Send the hello handshake before any other output. The codec is set
+    // inside read_initial_settings, so it's safe to emit framed messages now.
+    emit_hello();
 
     // Spawn stdin reader thread with tokio channel. The receiver goes into
     // STDIN_RX so the subscription (which is a fn pointer, not a closure)

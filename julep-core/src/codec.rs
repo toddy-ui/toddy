@@ -336,7 +336,10 @@ mod tests {
 
     #[test]
     fn msgpack_roundtrip_tagged_enum_beta() {
-        let original = Tagged::Beta { x: 3.14, y: -1.0 };
+        let original = Tagged::Beta {
+            x: std::f64::consts::PI,
+            y: -1.0,
+        };
         let bytes = Codec::MsgPack.encode(&original).unwrap();
         let payload = &bytes[4..];
         let decoded: Tagged = Codec::MsgPack.decode(payload).unwrap();

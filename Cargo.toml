@@ -2,7 +2,11 @@
 members = ["julep-core", "julep-renderer"]
 resolver = "2"
 
-# Local development: iced_winit is vendored in a sibling repo.
-# Create .cargo/config.toml with:
-#   [patch.crates-io]
-#   iced_winit = { path = "../iced_winit" }
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/lincracy/julep-renderer"
+
+[patch.crates-io]
+iced_winit = { git = "https://github.com/lincracy/iced", branch = "a11y-accesskit" }

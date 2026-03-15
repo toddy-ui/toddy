@@ -1,8 +1,9 @@
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
-/// Expected protocol version. The Elixir side embeds this in Settings.
-pub const PROTOCOL_VERSION: &str = "1.0";
+/// Protocol version number. Sent in the `hello` handshake message on startup
+/// and checked against the value the Elixir side embeds in Settings.
+pub const PROTOCOL_VERSION: u32 = 1;
 
 /// Messages sent from Elixir to the renderer over stdin (JSONL).
 #[derive(Debug, Clone, Deserialize)]
@@ -1419,10 +1420,10 @@ mod tests {
             modifiers: {
                 let mut m = keyboard::Modifiers::empty();
                 if shift {
-                    m = m | keyboard::Modifiers::SHIFT;
+                    m |= keyboard::Modifiers::SHIFT;
                 }
                 if alt {
-                    m = m | keyboard::Modifiers::ALT;
+                    m |= keyboard::Modifiers::ALT;
                 }
                 m
             },

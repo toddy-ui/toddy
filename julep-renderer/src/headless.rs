@@ -53,6 +53,8 @@ pub mod headless_mode {
         log::info!("wire codec: {codec:?}");
         Codec::set_global(codec);
 
+        crate::renderer::emit_hello();
+
         loop {
             match codec.read_message(&mut reader) {
                 Ok(None) => break,
