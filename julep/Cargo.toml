@@ -1,10 +1,15 @@
 [package]
 name = "julep"
+description = "Native GUI renderer driven by a wire protocol over stdin/stdout"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "../README.md"
 
 [lib]
 name = "julep"
