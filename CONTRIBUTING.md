@@ -4,7 +4,7 @@
 
 ### Rust
 
-Install [Rust](https://rustup.rs) (stable). The project pins **Rust 1.82.0**
+Install [Rust](https://rustup.rs) (stable). The project pins **Rust 1.92.0**
 via `rust-toolchain.toml` -- rustup will install this automatically.
 
 ### System Dependencies
