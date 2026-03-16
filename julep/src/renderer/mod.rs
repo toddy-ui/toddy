@@ -325,11 +325,10 @@ impl App {
             // -- System / animation --
             Message::AnimationFrame(instant) => {
                 if let Some(tag) = self.core.active_subscriptions.get("on_animation_frame") {
-                    // Convert Instant to a duration since some epoch. We use
-                    // elapsed from the process start as a monotonic timestamp.
-                    let millis = instant
-                        .duration_since(iced::time::Instant::now() - instant.elapsed())
-                        .as_millis();
+                    use std::sync::OnceLock;
+                    static EPOCH: OnceLock<iced::time::Instant> = OnceLock::new();
+                    let epoch = *EPOCH.get_or_init(|| instant);
+                    let millis = instant.duration_since(epoch).as_millis();
                     emit_event(OutgoingEvent::animation_frame(tag.clone(), millis));
                 }
                 Task::none()
