@@ -419,11 +419,6 @@ impl widget::Operation for A11yInterceptor<'_, '_> {
             invalid: self.overrides.invalid || accessible.invalid,
             modal: self.overrides.modal || accessible.modal,
             read_only: self.overrides.read_only || accessible.read_only,
-            disabled: if self.overrides.read_only {
-                true
-            } else {
-                accessible.disabled
-            },
             mnemonic: self.overrides.mnemonic.or(accessible.mnemonic),
             ..accessible.clone()
         };
@@ -452,7 +447,6 @@ impl widget::Operation for A11yInterceptor<'_, '_> {
                 invalid: self.overrides.invalid,
                 modal: self.overrides.modal,
                 read_only: self.overrides.read_only,
-                disabled: self.overrides.read_only,
                 mnemonic: self.overrides.mnemonic,
                 ..Accessible::default()
             };
