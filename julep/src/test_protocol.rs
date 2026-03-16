@@ -480,6 +480,51 @@ pub fn handle_interact(core: &Core, id: String, action: String, selector: Value,
                 }),
             ]
         }
+        ("paste", Some(wid)) => {
+            let text = payload.get("text").and_then(|v| v.as_str()).unwrap_or("");
+            vec![serde_json::json!({"type": "event", "event": "paste", "id": wid, "value": text})]
+        }
+        ("scroll", _) => {
+            let delta_x = payload
+                .get("delta_x")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            let delta_y = payload
+                .get("delta_y")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            vec![serde_json::json!({
+                "type": "event", "event": "scroll", "id": "", "delta_x": delta_x, "delta_y": delta_y
+            })]
+        }
+        ("sort", Some(wid)) => {
+            let column = payload.get("column").and_then(|v| v.as_str()).unwrap_or("");
+            vec![serde_json::json!({"type": "event", "event": "sort", "id": wid, "value": column})]
+        }
+        ("pane_focus_cycle", Some(wid)) => {
+            vec![serde_json::json!({"type": "event", "event": "pane_focus_cycle", "id": wid})]
+        }
+        ("canvas_press", Some(wid)) => {
+            let x = payload.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let y = payload.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            vec![serde_json::json!({
+                "type": "event", "event": "canvas_press", "id": wid, "x": x, "y": y
+            })]
+        }
+        ("canvas_release", Some(wid)) => {
+            let x = payload.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let y = payload.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            vec![serde_json::json!({
+                "type": "event", "event": "canvas_release", "id": wid, "x": x, "y": y
+            })]
+        }
+        ("canvas_move", Some(wid)) => {
+            let x = payload.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let y = payload.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            vec![serde_json::json!({
+                "type": "event", "event": "canvas_move", "id": wid, "x": x, "y": y
+            })]
+        }
         _ => {
             log::warn!("unknown action '{action}' or widget not found");
             vec![]
@@ -1090,6 +1135,90 @@ mod tests {
             "click".to_string(),
             json!({"by": "label", "value": "Click me"}),
             json!({}),
+        );
+    }
+
+    #[test]
+    fn handle_interact_paste_does_not_panic() {
+        let core = core_with_tree();
+        handle_interact(
+            &core,
+            "i17".to_string(),
+            "paste".to_string(),
+            json!({"by": "id", "value": "input1"}),
+            json!({"text": "pasted text"}),
+        );
+    }
+
+    #[test]
+    fn handle_interact_scroll_does_not_panic() {
+        let core = core_with_tree();
+        handle_interact(
+            &core,
+            "i18".to_string(),
+            "scroll".to_string(),
+            json!({}),
+            json!({"delta_x": 0.0, "delta_y": -10.0}),
+        );
+    }
+
+    #[test]
+    fn handle_interact_sort_does_not_panic() {
+        let core = core_with_tree();
+        handle_interact(
+            &core,
+            "i19".to_string(),
+            "sort".to_string(),
+            json!({"by": "id", "value": "btn1"}),
+            json!({"column": "name"}),
+        );
+    }
+
+    #[test]
+    fn handle_interact_pane_focus_cycle_does_not_panic() {
+        let core = core_with_tree();
+        handle_interact(
+            &core,
+            "i20".to_string(),
+            "pane_focus_cycle".to_string(),
+            json!({"by": "id", "value": "btn1"}),
+            json!({}),
+        );
+    }
+
+    #[test]
+    fn handle_interact_canvas_press_does_not_panic() {
+        let core = core_with_tree();
+        handle_interact(
+            &core,
+            "i21".to_string(),
+            "canvas_press".to_string(),
+            json!({"by": "id", "value": "btn1"}),
+            json!({"x": 50.0, "y": 75.0}),
+        );
+    }
+
+    #[test]
+    fn handle_interact_canvas_release_does_not_panic() {
+        let core = core_with_tree();
+        handle_interact(
+            &core,
+            "i22".to_string(),
+            "canvas_release".to_string(),
+            json!({"by": "id", "value": "btn1"}),
+            json!({"x": 50.0, "y": 75.0}),
+        );
+    }
+
+    #[test]
+    fn handle_interact_canvas_move_does_not_panic() {
+        let core = core_with_tree();
+        handle_interact(
+            &core,
+            "i23".to_string(),
+            "canvas_move".to_string(),
+            json!({"by": "id", "value": "btn1"}),
+            json!({"x": 60.0, "y": 80.0}),
         );
     }
 

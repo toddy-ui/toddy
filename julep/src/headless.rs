@@ -227,6 +227,16 @@ pub mod headless_mode {
                     }
                 }
             }
+            IncomingMessage::AdvanceFrame { timestamp } => {
+                if let Some(tag) = core.active_subscriptions.get("on_animation_frame") {
+                    crate::test_protocol::emit_wire(
+                        &julep_core::protocol::OutgoingEvent::animation_frame(
+                            tag.clone(),
+                            timestamp as u128,
+                        ),
+                    );
+                }
+            }
         }
     }
 

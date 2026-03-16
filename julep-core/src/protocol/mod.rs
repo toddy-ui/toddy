@@ -131,6 +131,11 @@ pub enum IncomingMessage {
     ExtensionCommandBatch {
         commands: Vec<ExtensionCommandItem>,
     },
+    /// Advance the animation clock by one frame (headless/test mode).
+    /// Emits an `animation_frame` event if `on_animation_frame` is subscribed.
+    AdvanceFrame {
+        timestamp: u64,
+    },
 }
 
 /// A single item within an `ExtensionCommandBatch`.

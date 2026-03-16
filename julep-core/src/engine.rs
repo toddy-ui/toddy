@@ -269,6 +269,9 @@ impl Core {
             IncomingMessage::ExtensionCommand { .. } => {
                 log::debug!("ExtensionCommand message ignored by Core (handled by renderer App)");
             }
+            IncomingMessage::AdvanceFrame { .. } => {
+                log::debug!("AdvanceFrame message ignored by Core (handled by headless/test_mode)");
+            }
             IncomingMessage::ExtensionCommandBatch { .. } => {
                 log::debug!(
                     "ExtensionCommandBatch message ignored by Core (handled by renderer App)"

@@ -316,6 +316,7 @@ pub(crate) fn read_initial_settings(
                 IncomingMessage::ImageOp { .. } => "image_op",
                 IncomingMessage::ExtensionCommand { .. } => "extension_command",
                 IncomingMessage::ExtensionCommandBatch { .. } => "extension_command_batch",
+                IncomingMessage::AdvanceFrame { .. } => "advance_frame",
             };
             log::error!("expected settings as first message, got {variant}");
             (
