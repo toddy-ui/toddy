@@ -76,6 +76,6 @@ See the `WidgetExtension` trait docs and examples in
 
 ## Pull Requests
 
-1. Create a branch from `master`
+1. Create a branch from `main`
 2. Make changes, ensure `just preflight` passes
 3. Submit PR with a clear description

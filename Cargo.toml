@@ -3,29 +3,11 @@ members = ["julep-core", "julep"]
 resolver = "2"
 
 [workspace.package]
-version = "0.6.0"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.92"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/lincracy/julep"
+repository = "https://github.com/julep-ui/julep"
 authors = ["Daniel Hedlund <daniel@digitree.org>"]
 keywords = ["gui", "desktop", "renderer", "native", "iced"]
 categories = ["gui", "rendering"]
-
-# Local development: resolve julep-iced-* crates from the local fork.
-# Remove this section when the fork is published to crates.io.
-[patch.crates-io]
-julep-iced = { path = "../julep-iced" }
-julep-iced-core = { path = "../julep-iced/core" }
-julep-iced-futures = { path = "../julep-iced/futures" }
-julep-iced-runtime = { path = "../julep-iced/runtime" }
-julep-iced-winit = { path = "../julep-iced/winit" }
-julep-iced-renderer = { path = "../julep-iced/renderer" }
-julep-iced-widget = { path = "../julep-iced/widget" }
-julep-iced-wgpu = { path = "../julep-iced/wgpu" }
-julep-iced-tiny-skia = { path = "../julep-iced/tiny_skia" }
-julep-iced-graphics = { path = "../julep-iced/graphics" }
-julep-iced-debug = { path = "../julep-iced/debug" }
-julep-iced-highlighter = { path = "../julep-iced/highlighter" }
-julep-iced-program = { path = "../julep-iced/program" }
-julep-iced-test = { path = "../julep-iced/test" }

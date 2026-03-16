@@ -4,7 +4,7 @@ A standalone native GUI renderer driven by a simple wire protocol over
 stdin/stdout. Send it a tree of UI nodes as MessagePack or JSON, get
 native desktop windows. Send updates, get events back.
 
-Built for the [Julep Elixir toolkit](https://github.com/lincracy/julep-elixir),
+Built for the [Julep Elixir toolkit](https://github.com/julep-ui/julep-elixir),
 but the renderer doesn't know or care what language is on the other
 end. Any language that can spawn a process and write bytes to its stdin
 can use it.
@@ -97,7 +97,7 @@ There are two ways to update the UI:
   only the changes (prop updates, insertions, removals). More
   efficient for large trees or high-frequency updates. Requires the
   client to implement tree diffing -- the
-  [Julep](https://github.com/lincracy/julep-elixir) toolkit does
+  [Julep](https://github.com/julep-ui/julep-elixir) toolkit does
   this, for example.
 
 Start with snapshots. Add patching later if you need the performance.
@@ -150,7 +150,7 @@ with their own state, event handling, and lifecycle management.
 
 **Language communities without native GUI options.** If your language
 can write JSON to stdout and read it back, you can build a toolkit on
-top. The [Julep](https://github.com/lincracy/julep-elixir) toolkit for
+top. The [Julep](https://github.com/julep-ui/julep-elixir) toolkit for
 Elixir was the first; Python, Go, Ruby, Node.js, or anything else
 could follow the same pattern.
 
@@ -259,14 +259,14 @@ protocol includes a version handshake so host libraries can detect
 incompatibilities.
 
 The first toolkit built on this renderer is
-[Julep](https://github.com/lincracy/julep-elixir), a desktop GUI
+[Julep](https://github.com/julep-ui/julep-elixir), a desktop GUI
 framework for Elixir.
 
 ## Documentation
 
 - [Protocol reference](docs/protocol.md) -- Wire format, message types,
   encoding, startup handshake
-- [Julep](https://github.com/lincracy/julep-elixir) -- Elixir desktop
+- [Julep](https://github.com/julep-ui/julep-elixir) -- Elixir desktop
   GUI toolkit built on this renderer, with documentation of the tree
   format, event model, and UI builder DSL
 
