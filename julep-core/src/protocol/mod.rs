@@ -1351,7 +1351,7 @@ mod tests {
         );
         let json = serde_json::to_value(&evt).unwrap();
         assert_eq!(json["family"], "pane_dragged");
-        assert_eq!(json["data"]["kind"], "dropped");
+        assert_eq!(json["data"]["action"], "dropped");
         assert_eq!(json["data"]["pane"], "pane_a");
         assert_eq!(json["data"]["target"], "pane_b");
         assert_eq!(json["data"]["region"], "center");
@@ -1368,7 +1368,7 @@ mod tests {
             None,
         );
         let json = serde_json::to_value(&evt).unwrap();
-        assert_eq!(json["data"]["kind"], "picked");
+        assert_eq!(json["data"]["action"], "picked");
         assert_eq!(json["data"]["pane"], "pane_a");
         assert!(json["data"].get("target").is_none());
     }
@@ -1384,7 +1384,7 @@ mod tests {
             None,
         );
         let json = serde_json::to_value(&evt).unwrap();
-        assert_eq!(json["data"]["kind"], "canceled");
+        assert_eq!(json["data"]["action"], "canceled");
     }
 
     #[test]

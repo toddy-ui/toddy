@@ -508,7 +508,7 @@ impl OutgoingEvent {
         region: Option<&str>,
         edge: Option<&str>,
     ) -> Self {
-        let mut data = serde_json::json!({"kind": kind, "pane": pane});
+        let mut data = serde_json::json!({"action": kind, "pane": pane});
         if let Some(t) = target {
             data["target"] = serde_json::json!(t);
         }
