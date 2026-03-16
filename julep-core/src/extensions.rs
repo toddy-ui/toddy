@@ -531,6 +531,10 @@ impl ExtensionDispatcher {
             None => return EventResult::PassThrough,
         };
         if self.poisoned[ext_idx] {
+            log::error!(
+                "extension `{}` is poisoned, dropping event `{family}` for node `{id}`",
+                self.extensions[ext_idx].config_key()
+            );
             return EventResult::PassThrough;
         }
         if catch_unwind_enabled() {
@@ -576,7 +580,14 @@ impl ExtensionDispatcher {
             }
         };
         if self.poisoned[ext_idx] {
-            return vec![];
+            return vec![OutgoingEvent::generic(
+                "extension_error".to_string(),
+                node_id.to_string(),
+                Some(serde_json::json!({
+                    "error": "extension is disabled due to previous panics",
+                    "op": op,
+                })),
+            )];
         }
         if catch_unwind_enabled() {
             match catch_unwind(AssertUnwindSafe(|| {
@@ -1274,6 +1285,38 @@ mod tests {
 
         // Extension should also be poisoned.
         assert!(dispatcher.is_poisoned(0));
+    }
+
+    #[test]
+    fn handle_command_poisoned_returns_error_event() {
+        let ext = PanickingCommandExtension;
+        let mut dispatcher = ExtensionDispatcher::new(vec![Box::new(ext)]);
+        let mut caches = ExtensionCaches::new();
+
+        // Register the node.
+        let mut root = make_node("root", "column");
+        root.children.push(make_node("p1", "panicker"));
+        dispatcher.prepare_all(&root, &mut caches, &Theme::Dark);
+
+        // Poison via render panic threshold.
+        for _ in 0..RENDER_PANIC_THRESHOLD {
+            dispatcher.record_render_panic("panicker");
+        }
+        dispatcher.prepare_all(&root, &mut caches, &Theme::Dark);
+        assert!(dispatcher.is_poisoned(0));
+
+        // Command on a poisoned extension should return an error event.
+        let events = dispatcher.handle_command("p1", "do_thing", &Value::Null, &mut caches);
+        assert_eq!(events.len(), 1);
+        let event = &events[0];
+        assert_eq!(event.family, "extension_error");
+        assert_eq!(event.id, "p1");
+        let data = event.data.as_ref().expect("should have data");
+        assert_eq!(
+            data.get("error").and_then(|v| v.as_str()),
+            Some("extension is disabled due to previous panics")
+        );
+        assert_eq!(data.get("op").and_then(|v| v.as_str()), Some("do_thing"));
     }
 
     // -- cleanup_all ----------------------------------------------------------

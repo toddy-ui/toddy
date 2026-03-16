@@ -2,8 +2,10 @@ use iced::widget::pane_grid;
 use iced::{Task, window};
 
 use julep_core::message::Message;
+use julep_core::protocol::OutgoingEvent;
 
 use super::App;
+use super::emitters::emit_event;
 
 // ---------------------------------------------------------------------------
 // Widget operations (impl App)
@@ -242,7 +244,7 @@ impl App {
         width: Option<u32>,
         height: Option<u32>,
     ) {
-        match op {
+        let result = match op {
             "create_image" | "update_image" => {
                 if let Some(pixel_bytes) = pixels {
                     // RGBA pixel data (raw bytes, no base64 decode needed)
@@ -253,21 +255,31 @@ impl App {
                         w,
                         h,
                         pixel_bytes.to_vec(),
-                    );
+                    )
                 } else if let Some(image_bytes) = data {
                     // Encoded image bytes (PNG, JPEG, etc. -- raw bytes)
                     self.image_registry
-                        .create_from_bytes(handle.to_string(), image_bytes.to_vec());
+                        .create_from_bytes(handle.to_string(), image_bytes.to_vec())
                 } else {
                     log::warn!("image_op {op}: missing data or pixels field");
+                    Err(format!("image_op {op}: missing data or pixels field"))
                 }
             }
             "delete_image" => {
                 self.image_registry.delete(handle);
+                Ok(())
             }
             other => {
                 log::warn!("unknown image_op: {other}");
+                Err(format!("unknown image_op: {other}"))
             }
+        };
+        if let Err(error) = result {
+            emit_event(OutgoingEvent::generic(
+                "image_error".to_string(),
+                handle.to_string(),
+                Some(serde_json::json!({ "error": error })),
+            ));
         }
     }
 }

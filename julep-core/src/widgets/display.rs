@@ -119,6 +119,42 @@ pub(crate) fn render_rich_text<'a>(
                     if let Some(link) = sv.get("link").and_then(|v| v.as_str()) {
                         s = s.link(link.to_owned());
                     }
+                    if let Some(true) = sv.get("underline").and_then(|v| v.as_bool()) {
+                        s = s.underline(true);
+                    }
+                    if let Some(true) = sv.get("strikethrough").and_then(|v| v.as_bool()) {
+                        s = s.strikethrough(true);
+                    }
+                    if let Some(lh) = sv.get("line_height").and_then(|v| v.as_f64()) {
+                        s = s.line_height(LineHeight::Relative(lh as f32));
+                    }
+                    if let Some(p) = sv.get("padding") {
+                        if let Some(n) = p.as_f64() {
+                            s = s.padding(n as f32);
+                        } else if let Some(obj) = p.as_object() {
+                            let top = obj.get("top").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                            let right =
+                                obj.get("right").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                            let bottom =
+                                obj.get("bottom").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                            let left =
+                                obj.get("left").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                            s = s.padding(Padding {
+                                top,
+                                right,
+                                bottom,
+                                left,
+                            });
+                        }
+                    }
+                    if let Some(hl) = sv.get("highlight").and_then(|v| v.as_object()) {
+                        if let Some(bg) = hl.get("background").and_then(parse_color) {
+                            s = s.background(bg);
+                        }
+                        if let Some(b) = hl.get("border") {
+                            s = s.border(parse_border(b));
+                        }
+                    }
                     s
                 })
                 .collect()

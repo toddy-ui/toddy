@@ -22,37 +22,20 @@ impl Tree {
         self.root.as_ref()
     }
 
-    /// Find a window node by its julep ID.
-    ///
-    /// If the root itself is a window with a matching ID, return it.
-    /// Otherwise, search the root's direct children for a window node
-    /// with the given ID.
+    /// Find a window node by its julep ID, searching the entire tree recursively.
     pub fn find_window(&self, julep_id: &str) -> Option<&TreeNode> {
         let root = self.root.as_ref()?;
-        if root.type_name == "window" && root.id == julep_id {
-            return Some(root);
-        }
-        root.children
-            .iter()
-            .find(|child| child.type_name == "window" && child.id == julep_id)
+        find_window_recursive(root, julep_id)
     }
 
-    /// Collect the IDs of all window nodes in the tree.
-    ///
-    /// If the root is a window, returns just its ID. Otherwise, returns
-    /// the IDs of all direct children that are window nodes.
+    /// Collect the IDs of all window nodes in the tree (recursive search).
     pub fn window_ids(&self) -> Vec<String> {
         let Some(root) = self.root.as_ref() else {
             return Vec::new();
         };
-        if root.type_name == "window" {
-            return vec![root.id.clone()];
-        }
-        root.children
-            .iter()
-            .filter(|child| child.type_name == "window")
-            .map(|child| child.id.clone())
-            .collect()
+        let mut ids = Vec::new();
+        collect_window_ids_recursive(root, &mut ids);
+        ids
     }
 
     /// Apply a sequence of patch operations to the tree.
@@ -65,7 +48,7 @@ impl Tree {
     pub fn apply_patch(&mut self, ops: Vec<PatchOp>) {
         for op in ops {
             if let Err(e) = self.apply_op(&op) {
-                log::warn!("failed to apply patch op {:?}: {}", op.op, e);
+                log::error!("failed to apply patch op {:?}: {}", op.op, e);
             }
         }
     }
@@ -103,15 +86,25 @@ impl Tree {
                     .get("props")
                     .ok_or("update_props: missing 'props' field")?;
 
-                if let (Some(target_map), Some(patch_map)) =
-                    (target.props.as_object_mut(), props.as_object())
-                {
-                    for (k, v) in patch_map {
-                        if v.is_null() {
-                            target_map.remove(k);
-                        } else {
-                            target_map.insert(k.clone(), v.clone());
-                        }
+                if !target.props.is_object() {
+                    log::error!(
+                        "update_props: target node '{}' props is not an object: {}",
+                        target.id,
+                        target.props
+                    );
+                    return Ok(());
+                }
+                if !props.is_object() {
+                    log::error!("update_props: patch props is not an object: {}", props);
+                    return Ok(());
+                }
+                let target_map = target.props.as_object_mut().unwrap();
+                let patch_map = props.as_object().unwrap();
+                for (k, v) in patch_map {
+                    if v.is_null() {
+                        target_map.remove(k);
+                    } else {
+                        target_map.insert(k.clone(), v.clone());
                     }
                 }
                 Ok(())
@@ -134,7 +127,7 @@ impl Tree {
                 if index <= parent.children.len() {
                     parent.children.insert(index, new_node);
                 } else {
-                    log::warn!(
+                    log::error!(
                         "insert_child: index {index} is beyond children length {}, appending instead",
                         parent.children.len()
                     );
@@ -166,6 +159,27 @@ impl Tree {
                 Ok(())
             }
         }
+    }
+}
+
+fn find_window_recursive<'a>(node: &'a TreeNode, julep_id: &str) -> Option<&'a TreeNode> {
+    if node.type_name == "window" && node.id == julep_id {
+        return Some(node);
+    }
+    for child in &node.children {
+        if let Some(found) = find_window_recursive(child, julep_id) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+fn collect_window_ids_recursive(node: &TreeNode, ids: &mut Vec<String>) {
+    if node.type_name == "window" {
+        ids.push(node.id.clone());
+    }
+    for child in &node.children {
+        collect_window_ids_recursive(child, ids);
     }
 }
 
@@ -346,7 +360,7 @@ mod tests {
     }
 
     #[test]
-    fn find_window_does_not_search_grandchildren() {
+    fn find_window_searches_grandchildren() {
         let mut tree = Tree::new();
         let root = make_node_with_children(
             "root",
@@ -358,8 +372,53 @@ mod tests {
             )],
         );
         tree.snapshot(root);
-        // find_window only searches root and direct children
-        assert!(tree.find_window("deep_win").is_none());
+        let found = tree.find_window("deep_win");
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().id, "deep_win");
+    }
+
+    #[test]
+    fn find_window_deeply_nested() {
+        let mut tree = Tree::new();
+        let root = make_node_with_children(
+            "root",
+            "column",
+            vec![make_node_with_children(
+                "l1",
+                "row",
+                vec![make_node_with_children(
+                    "l2",
+                    "column",
+                    vec![make_node_with_children(
+                        "l3",
+                        "row",
+                        vec![make_node("buried_win", "window")],
+                    )],
+                )],
+            )],
+        );
+        tree.snapshot(root);
+        let found = tree.find_window("buried_win");
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().id, "buried_win");
+    }
+
+    #[test]
+    fn window_ids_finds_nested_windows() {
+        let mut tree = Tree::new();
+        let root = make_node_with_children(
+            "root",
+            "column",
+            vec![
+                make_node("w1", "window"),
+                make_node_with_children("inner", "row", vec![make_node("w2", "window")]),
+            ],
+        );
+        tree.snapshot(root);
+        let ids = tree.window_ids();
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&"w1".to_string()));
+        assert!(ids.contains(&"w2".to_string()));
     }
 
     // -----------------------------------------------------------------------
@@ -580,6 +639,44 @@ mod tests {
         );
         tree.apply_patch(vec![op]);
         assert_eq!(tree.root().unwrap().children[0].props["content"], "new");
+    }
+
+    #[test]
+    fn patch_update_props_non_object_target_props_does_not_panic() {
+        let mut tree = Tree::new();
+        // Target has a non-object props value (a string)
+        tree.snapshot(make_node_with_props("root", "text", json!("not an object")));
+        let op = make_patch_op(
+            "update_props",
+            vec![],
+            json!({
+                "props": {"content": "new"}
+            }),
+        );
+        tree.apply_patch(vec![op]);
+        // Props unchanged -- the merge was skipped
+        assert_eq!(tree.root().unwrap().props, json!("not an object"));
+    }
+
+    #[test]
+    fn patch_update_props_non_object_patch_props_does_not_panic() {
+        let mut tree = Tree::new();
+        tree.snapshot(make_node_with_props(
+            "root",
+            "text",
+            json!({"content": "hi"}),
+        ));
+        // Patch props is a string, not an object
+        let op = make_patch_op(
+            "update_props",
+            vec![],
+            json!({
+                "props": "not an object"
+            }),
+        );
+        tree.apply_patch(vec![op]);
+        // Props unchanged -- the merge was skipped
+        assert_eq!(tree.root().unwrap().props["content"], "hi");
     }
 
     // -----------------------------------------------------------------------

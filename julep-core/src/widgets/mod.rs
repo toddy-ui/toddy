@@ -684,7 +684,9 @@ mod tests {
             0x21, 0xBC, 0x33, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, // IEND
             0x44, 0xAE, 0x42, 0x60, 0x82,
         ];
-        registry.create_from_bytes("test_sprite".to_string(), png_bytes);
+        registry
+            .create_from_bytes("test_sprite".to_string(), png_bytes)
+            .expect("test sprite should be valid");
         assert!(
             registry.get("test_sprite").is_some(),
             "registered handle should be retrievable"
