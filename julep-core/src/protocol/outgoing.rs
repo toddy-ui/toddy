@@ -405,7 +405,6 @@ impl OutgoingEvent {
     // Canvas events
     // -----------------------------------------------------------------------
 
-    #[cfg(feature = "widget-canvas")]
     pub fn canvas_press(id: String, x: f32, y: f32, button: String) -> Self {
         Self {
             data: Some(
@@ -415,7 +414,6 @@ impl OutgoingEvent {
         }
     }
 
-    #[cfg(feature = "widget-canvas")]
     pub fn canvas_release(id: String, x: f32, y: f32, button: String) -> Self {
         Self {
             data: Some(
@@ -425,7 +423,6 @@ impl OutgoingEvent {
         }
     }
 
-    #[cfg(feature = "widget-canvas")]
     pub fn canvas_move(id: String, x: f32, y: f32) -> Self {
         Self {
             data: Some(serde_json::json!({"x": sanitize_f32(x), "y": sanitize_f32(y)})),
@@ -433,7 +430,6 @@ impl OutgoingEvent {
         }
     }
 
-    #[cfg(feature = "widget-canvas")]
     pub fn canvas_scroll(id: String, x: f32, y: f32, delta_x: f32, delta_y: f32) -> Self {
         Self {
             data: Some(

@@ -221,7 +221,6 @@ pub(crate) fn prop_range_f64(props: Props<'_>) -> std::ops::RangeInclusive<f64> 
         .unwrap_or(0.0..=100.0)
 }
 
-#[cfg(any(feature = "widget-image", feature = "widget-svg"))]
 pub(crate) fn prop_content_fit(props: Props<'_>) -> Option<ContentFit> {
     let s = prop_str(props, "content_fit")?;
     match s.to_ascii_lowercase().as_str() {

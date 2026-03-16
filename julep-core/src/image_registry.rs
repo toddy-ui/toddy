@@ -1,7 +1,5 @@
-#[cfg(feature = "widget-image")]
 use std::collections::HashMap;
 
-#[cfg(feature = "widget-image")]
 use iced::widget::image;
 
 /// Sniff the image format from the first few bytes (magic bytes).
@@ -31,7 +29,6 @@ fn sniff_image_format(data: &[u8]) -> Option<&'static str> {
 /// In-memory registry for image handles. Allows the host to send raw pixel
 /// or encoded image data and reference them by name in the UI tree.
 pub struct ImageRegistry {
-    #[cfg(feature = "widget-image")]
     handles: HashMap<String, image::Handle>,
 }
 
@@ -44,7 +41,6 @@ impl Default for ImageRegistry {
 impl ImageRegistry {
     pub fn new() -> Self {
         Self {
-            #[cfg(feature = "widget-image")]
             handles: HashMap::new(),
         }
     }
@@ -56,7 +52,6 @@ impl ImageRegistry {
     const MAX_PIXEL_BYTES: usize = 256 * 1024 * 1024;
 
     /// Store an image from encoded bytes (PNG, JPEG, etc.).
-    #[cfg(feature = "widget-image")]
     pub fn create_from_bytes(&mut self, name: String, data: Vec<u8>) {
         if data.len() > Self::MAX_PIXEL_BYTES {
             log::error!(
@@ -76,13 +71,7 @@ impl ImageRegistry {
         self.handles.insert(name, image::Handle::from_bytes(data));
     }
 
-    #[cfg(not(feature = "widget-image"))]
-    pub fn create_from_bytes(&mut self, _name: String, _data: Vec<u8>) {
-        log::warn!("image registry: widget-image feature not enabled");
-    }
-
     /// Store an image from raw RGBA pixel data.
-    #[cfg(feature = "widget-image")]
     pub fn create_from_rgba(&mut self, name: String, width: u32, height: u32, pixels: Vec<u8>) {
         if width > Self::MAX_DIMENSION || height > Self::MAX_DIMENSION {
             log::error!(
@@ -121,35 +110,18 @@ impl ImageRegistry {
             .insert(name, image::Handle::from_rgba(width, height, pixels));
     }
 
-    #[cfg(not(feature = "widget-image"))]
-    pub fn create_from_rgba(&mut self, _name: String, _width: u32, _height: u32, _pixels: Vec<u8>) {
-        log::warn!("image registry: widget-image feature not enabled");
-    }
-
     /// Remove a named image handle.
-    #[cfg(feature = "widget-image")]
     pub fn delete(&mut self, name: &str) {
         self.handles.remove(name);
     }
 
-    #[cfg(not(feature = "widget-image"))]
-    pub fn delete(&mut self, _name: &str) {}
-
     /// Look up a named image handle.
-    #[cfg(feature = "widget-image")]
     pub fn get(&self, name: &str) -> Option<&image::Handle> {
         self.handles.get(name)
-    }
-
-    #[cfg(not(feature = "widget-image"))]
-    #[allow(dead_code)]
-    pub fn get(&self, _name: &str) -> Option<&()> {
-        None
     }
 }
 
 #[cfg(test)]
-#[cfg(feature = "widget-image")]
 mod tests {
     use super::*;
 

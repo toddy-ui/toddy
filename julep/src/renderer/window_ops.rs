@@ -431,12 +431,9 @@ impl App {
                     let wid = window_id.to_string();
                     let req_id = settings.get("request_id").cloned();
                     window::screenshot(iced_id).map(move |screenshot| {
-                        #[cfg(feature = "test-mode")]
                         let rgba_b64 = {
                             Some(base64::engine::general_purpose::STANDARD.encode(&screenshot.rgba))
                         };
-                        #[cfg(not(feature = "test-mode"))]
-                        let rgba_b64: Option<String> = None;
 
                         let mut data = serde_json::json!({
                             "width": screenshot.size.width,
@@ -603,7 +600,6 @@ impl App {
                     Message::NoOp
                 })
             }
-            #[cfg(feature = "widget-sysinfo")]
             "get_system_info" => {
                 let tag = settings
                     .get("tag")
@@ -626,11 +622,6 @@ impl App {
                     emit_query_response("system_info", &tag, data);
                     Message::NoOp
                 })
-            }
-            #[cfg(not(feature = "widget-sysinfo"))]
-            "get_system_info" => {
-                log::warn!("get_system_info requires the 'widget-sysinfo' feature");
-                Task::none()
             }
             "set_resize_increments" => {
                 if let Some(&iced_id) = self.window_map.get(window_id) {

@@ -527,7 +527,6 @@ fn draw_canvas_shape(
                 frame.stroke(&path, stroke);
             }
         }
-        #[cfg(feature = "widget-image")]
         "image" => {
             let x = json_f32(shape, "x");
             let y = json_f32(shape, "y");

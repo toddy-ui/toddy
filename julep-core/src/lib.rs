@@ -78,7 +78,6 @@ pub mod theming;
 pub mod tree;
 pub mod widgets;
 
-#[cfg(feature = "a11y")]
 pub(crate) mod a11y_widget;
 
 // Re-export iced so extension crates can use `julep_core::iced::*` without

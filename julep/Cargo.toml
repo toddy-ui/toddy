@@ -23,42 +23,11 @@ path = "src/main.rs"
 julep-core = { path = "../julep-core" }
 env_logger = "0.11"
 log = "0.4"
-iced = { version = "0.6", package = "julep-iced", features = ["tokio", "advanced"] }
+iced = { version = "0.6", package = "julep-iced", features = ["tokio", "advanced", "sysinfo"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 base64 = "0.22"
 tokio = { version = "1", features = ["sync"] }
-iced_test = { version = "0.6", package = "julep-iced-test", optional = true }
-sha2 = { version = "0.10", optional = true }
-iced_winit = { version = "0.6", package = "julep-iced-winit", optional = true }
-
-[features]
-default = ["builtin-all", "dialogs", "clipboard", "notifications", "a11y"]
-# Enables all built-in widget features.
-builtin-all = ["widget-image", "widget-svg", "widget-canvas", "widget-markdown", "widget-highlighter", "widget-sysinfo", "widget-qr-code"]
-# Image widget (iced/image).
-widget-image = ["julep-core/widget-image"]
-# SVG widget (iced/svg).
-widget-svg = ["julep-core/widget-svg"]
-# Canvas widget -- 2D drawing surface (iced/canvas).
-widget-canvas = ["julep-core/widget-canvas"]
-# Markdown widget (iced/markdown).
-widget-markdown = ["julep-core/widget-markdown"]
-# TextEditor syntax highlighting (iced/highlighter).
-widget-highlighter = ["julep-core/widget-highlighter"]
-# System info query (iced/sysinfo).
-widget-sysinfo = ["julep-core/widget-sysinfo", "iced/sysinfo"]
-# QR code widget (iced/canvas + qrcode crate).
-widget-qr-code = ["julep-core/widget-qr-code"]
-# File dialog support via rfd.
-dialogs = ["julep-core/dialogs"]
-# Clipboard read/write via arboard.
-clipboard = ["julep-core/clipboard"]
-# OS notification support via notify-rust.
-notifications = ["julep-core/notifications"]
-# Headless test mode (Core + iced_test Simulator, no display).
-headless = ["iced_test", "sha2"]
-# Full test mode (real iced::daemon + test protocol messages).
-test-mode = ["sha2"]
-# Accessibility via accesskit.
-a11y = ["julep-core/a11y", "dep:iced_winit", "iced_winit/a11y"]
+iced_test = { version = "0.6", package = "julep-iced-test" }
+sha2 = "0.10"
+iced_winit = { version = "0.6", package = "julep-iced-winit", features = ["a11y"] }

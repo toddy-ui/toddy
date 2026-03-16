@@ -43,7 +43,7 @@ pub fn handle_effect(id: String, kind: &str, payload: &Value) -> EffectResponse 
 }
 
 // ---------------------------------------------------------------------------
-// File dialogs -- synchronous handlers (requires "dialogs" feature / rfd crate)
+// File dialogs -- synchronous handlers (rfd crate)
 //
 // These sync handlers are used by `handle_effect()`, which is the fallback
 // path when the async runtime isn't available (e.g. during initialization or
@@ -59,7 +59,6 @@ pub fn handle_effect(id: String, kind: &str, payload: &Value) -> EffectResponse 
 /// **WARNING (macOS):** Sync file dialogs may deadlock if called on the main
 /// thread because macOS requires native dialogs to run on the main thread.
 /// Prefer `handle_async_effect` when a tokio runtime is available.
-#[cfg(feature = "dialogs")]
 fn handle_file_open(id: String, payload: &Value) -> EffectResponse {
     let title = payload
         .get("title")
@@ -93,17 +92,11 @@ fn handle_file_open(id: String, payload: &Value) -> EffectResponse {
     }
 }
 
-#[cfg(not(feature = "dialogs"))]
-fn handle_file_open(id: String, _payload: &Value) -> EffectResponse {
-    EffectResponse::unsupported(id)
-}
-
 /// Synchronous file save dialog. Used when the async runtime is unavailable.
 ///
 /// **WARNING (macOS):** Sync file dialogs may deadlock if called on the main
 /// thread because macOS requires native dialogs to run on the main thread.
 /// Prefer `handle_async_effect` when a tokio runtime is available.
-#[cfg(feature = "dialogs")]
 fn handle_file_save(id: String, payload: &Value) -> EffectResponse {
     let title = payload
         .get("title")
@@ -137,17 +130,11 @@ fn handle_file_save(id: String, payload: &Value) -> EffectResponse {
     }
 }
 
-#[cfg(not(feature = "dialogs"))]
-fn handle_file_save(id: String, _payload: &Value) -> EffectResponse {
-    EffectResponse::unsupported(id)
-}
-
 /// Synchronous directory select dialog. Used when the async runtime is unavailable.
 ///
 /// **WARNING (macOS):** Sync file dialogs may deadlock if called on the main
 /// thread because macOS requires native dialogs to run on the main thread.
 /// Prefer `handle_async_effect` when a tokio runtime is available.
-#[cfg(feature = "dialogs")]
 fn handle_directory_select(id: String, payload: &Value) -> EffectResponse {
     let title = payload
         .get("title")
@@ -162,20 +149,14 @@ fn handle_directory_select(id: String, payload: &Value) -> EffectResponse {
     }
 }
 
-#[cfg(not(feature = "dialogs"))]
-fn handle_directory_select(id: String, _payload: &Value) -> EffectResponse {
-    EffectResponse::unsupported(id)
-}
-
 // ---------------------------------------------------------------------------
-// Clipboard (requires "clipboard" feature / arboard crate)
+// Clipboard (arboard crate)
 //
 // A single Clipboard instance is kept alive for the process lifetime.
 // On Wayland, arboard serves clipboard data from a background thread
 // tied to the Clipboard instance -- dropping it loses the data.
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "clipboard")]
 fn with_clipboard(
     id: &str,
     f: impl FnOnce(&mut arboard::Clipboard, &str) -> EffectResponse,
@@ -208,7 +189,6 @@ fn with_clipboard(
     f(clipboard, id)
 }
 
-#[cfg(feature = "clipboard")]
 fn handle_clipboard_read(id: String) -> EffectResponse {
     with_clipboard(&id, |clipboard, id| match clipboard.get_text() {
         Ok(text) => EffectResponse::ok(id.to_string(), json!({"text": text})),
@@ -216,12 +196,6 @@ fn handle_clipboard_read(id: String) -> EffectResponse {
     })
 }
 
-#[cfg(not(feature = "clipboard"))]
-fn handle_clipboard_read(id: String) -> EffectResponse {
-    EffectResponse::unsupported(id)
-}
-
-#[cfg(feature = "clipboard")]
 fn handle_clipboard_write(id: String, payload: &Value) -> EffectResponse {
     let text = payload
         .get("text")
@@ -235,15 +209,10 @@ fn handle_clipboard_write(id: String, payload: &Value) -> EffectResponse {
     })
 }
 
-#[cfg(not(feature = "clipboard"))]
-fn handle_clipboard_write(id: String, _payload: &Value) -> EffectResponse {
-    EffectResponse::unsupported(id)
-}
-
 // Primary clipboard: uses the X11/Wayland primary selection on Linux.
 // On other platforms, falls back to the standard clipboard.
 
-#[cfg(all(feature = "clipboard", target_os = "linux"))]
+#[cfg(target_os = "linux")]
 fn handle_clipboard_read_primary(id: String) -> EffectResponse {
     use arboard::{GetExtLinux, LinuxClipboardKind};
 
@@ -262,7 +231,7 @@ fn handle_clipboard_read_primary(id: String) -> EffectResponse {
     })
 }
 
-#[cfg(all(feature = "clipboard", target_os = "linux"))]
+#[cfg(target_os = "linux")]
 fn handle_clipboard_write_primary(id: String, payload: &Value) -> EffectResponse {
     use arboard::{LinuxClipboardKind, SetExtLinux};
     let text = payload
@@ -287,28 +256,18 @@ fn handle_clipboard_write_primary(id: String, payload: &Value) -> EffectResponse
 }
 
 // On non-Linux platforms, primary clipboard falls back to the standard clipboard.
-#[cfg(all(feature = "clipboard", not(target_os = "linux")))]
+#[cfg(not(target_os = "linux"))]
 fn handle_clipboard_read_primary(id: String) -> EffectResponse {
     handle_clipboard_read(id)
 }
 
-#[cfg(all(feature = "clipboard", not(target_os = "linux")))]
+#[cfg(not(target_os = "linux"))]
 fn handle_clipboard_write_primary(id: String, payload: &Value) -> EffectResponse {
     handle_clipboard_write(id, payload)
 }
 
-#[cfg(not(feature = "clipboard"))]
-fn handle_clipboard_read_primary(id: String) -> EffectResponse {
-    EffectResponse::unsupported(id)
-}
-
-#[cfg(not(feature = "clipboard"))]
-fn handle_clipboard_write_primary(id: String, _payload: &Value) -> EffectResponse {
-    EffectResponse::unsupported(id)
-}
-
 // ---------------------------------------------------------------------------
-// Notifications (requires "notifications" feature / notify-rust crate)
+// Notifications (notify-rust crate)
 // ---------------------------------------------------------------------------
 
 /// Send an OS notification.
@@ -319,7 +278,6 @@ fn handle_clipboard_write_primary(id: String, _payload: &Value) -> EffectRespons
 /// - **Linux:** Depends on the desktop environment's notification daemon
 ///   (e.g. dunst, mako, GNOME notifications). Behavior varies by DE.
 /// - **Windows:** Uses the Windows toast notification system.
-#[cfg(feature = "notifications")]
 fn handle_notification(id: String, payload: &Value) -> EffectResponse {
     let title = payload
         .get("title")
@@ -338,11 +296,6 @@ fn handle_notification(id: String, payload: &Value) -> EffectResponse {
     }
 }
 
-#[cfg(not(feature = "notifications"))]
-fn handle_notification(id: String, _payload: &Value) -> EffectResponse {
-    EffectResponse::unsupported(id)
-}
-
 // ---------------------------------------------------------------------------
 // Async effect handlers (file dialogs via rfd::AsyncFileDialog)
 // ---------------------------------------------------------------------------
@@ -353,7 +306,6 @@ fn handle_notification(id: String, _payload: &Value) -> EffectResponse {
 // Note: on X11-only Linux desktops without a portal (e.g. minimal WMs),
 // rfd falls back to a GTK dialog which may block a tokio worker thread.
 // This is a known rfd limitation, not specific to julep.
-#[cfg(feature = "dialogs")]
 pub async fn handle_async_effect(id: String, effect_type: &str, params: &Value) -> EffectResponse {
     match effect_type {
         "file_open" => {
@@ -443,15 +395,6 @@ pub async fn handle_async_effect(id: String, effect_type: &str, params: &Value) 
     }
 }
 
-#[cfg(not(feature = "dialogs"))]
-pub async fn handle_async_effect(
-    id: String,
-    _effect_type: &str,
-    _params: &Value,
-) -> EffectResponse {
-    EffectResponse::unsupported(id)
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -539,7 +482,7 @@ mod tests {
         }
     }
 
-    // NOTE: The feature-gated handler implementations (file dialogs via rfd,
+    // NOTE: The handler implementations (file dialogs via rfd,
     // clipboard via arboard, notifications via notify-rust) interact with real
     // OS resources -- display server, clipboard daemon, notification service.
     // They can't be meaningfully unit-tested without those services running.

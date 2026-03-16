@@ -1,6 +1,5 @@
 use super::*;
 
-#[cfg(feature = "widget-qr-code")]
 use iced::widget::canvas;
 
 // ---------------------------------------------------------------------------
@@ -148,7 +147,6 @@ pub(crate) fn render_rich_text<'a>(
 // Image
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "widget-image")]
 pub(crate) fn render_image<'a>(
     node: &'a TreeNode,
     images: &'a crate::image_registry::ImageRegistry,
@@ -237,7 +235,6 @@ pub(crate) fn render_image<'a>(
 // SVG
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "widget-svg")]
 pub(crate) fn render_svg<'a>(node: &'a TreeNode) -> Element<'a, Message> {
     use iced::widget::Svg;
 
@@ -273,7 +270,6 @@ pub(crate) fn render_svg<'a>(node: &'a TreeNode) -> Element<'a, Message> {
 // Markdown
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "widget-markdown")]
 pub(crate) fn render_markdown<'a>(
     node: &'a TreeNode,
     caches: &'a WidgetCaches,
@@ -454,7 +450,6 @@ pub(crate) fn render_space<'a>(node: &'a TreeNode) -> Element<'a, Message> {
 // QR Code
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "widget-qr-code")]
 struct QrCodeProgram<'a> {
     modules: Vec<Vec<bool>>,
     cell_size: f32,
@@ -463,7 +458,6 @@ struct QrCodeProgram<'a> {
     cache: Option<&'a (u64, canvas::Cache)>,
 }
 
-#[cfg(feature = "widget-qr-code")]
 impl canvas::Program<Message> for QrCodeProgram<'_> {
     type State = ();
 
@@ -504,7 +498,6 @@ impl canvas::Program<Message> for QrCodeProgram<'_> {
     }
 }
 
-#[cfg(feature = "widget-qr-code")]
 pub(crate) fn render_qr_code<'a>(
     node: &'a TreeNode,
     caches: &'a WidgetCaches,

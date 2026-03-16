@@ -101,7 +101,6 @@ pub(crate) fn emit_query_response(kind: &str, tag: &str, data: serde_json::Value
 // ---------------------------------------------------------------------------
 
 /// Emit a screenshot_response to stdout (thin wrapper around shared function).
-#[cfg(feature = "test-mode")]
 pub(crate) fn emit_screenshot_response(
     id: &str,
     name: &str,

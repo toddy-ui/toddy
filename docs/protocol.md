@@ -366,7 +366,7 @@ Manage windows directly (outside of tree-driven sync).
 | `monitor_size` | width, height (logical pixels) |
 | `set_icon` | icon_data (base64 RGBA), width, height |
 | `get_system_theme` | system theme (light/dark) |
-| `get_system_info` | CPU, memory, GPU info (requires widget-sysinfo feature) |
+| `get_system_info` | CPU, memory, GPU info |
 
 Query operations accept an optional `request_id` field in settings,
 echoed back in the response for correlation.
@@ -526,7 +526,7 @@ Mouse area events (from `mouse_area` widget):
 | `mouse_move` | Cursor moved (data: {x, y}) |
 | `mouse_scroll` | Scroll within area (data: {delta_x, delta_y}) |
 
-Canvas events (requires `widget-canvas` feature):
+Canvas events:
 
 | Family | Fields | Description |
 |--------|--------|-------------|
@@ -659,7 +659,7 @@ JSON serialization errors and ensures all values are valid numbers.
 ## Test-mode messages
 
 The following message types are only available in test mode
-(`--test` flag, requires the `test-mode` feature):
+(`--test` flag):
 
 - **Query** -- Inspect the tree or find widgets
 - **Interact** -- Simulate user interactions (click, type, etc.)

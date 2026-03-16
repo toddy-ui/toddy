@@ -440,7 +440,6 @@ pub(crate) fn render_text_editor<'a>(
 
     // Syntax highlighting changes the generic type parameter, so we must
     // branch here and produce Element from each path separately.
-    #[cfg(feature = "widget-highlighter")]
     if let Some(syntax) = prop_str(props, "highlight_syntax") {
         let theme = match prop_str(props, "highlight_theme").as_deref() {
             Some("base16_mocha") => iced::highlighter::Theme::Base16Mocha,

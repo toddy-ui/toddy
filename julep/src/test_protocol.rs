@@ -313,7 +313,6 @@ pub fn handle_reset(core: &mut Core, id: String) {
 }
 
 /// Hash the current tree and emit a SnapshotCaptureResponse.
-#[cfg(any(feature = "headless", feature = "test-mode"))]
 pub fn handle_snapshot_capture(core: &Core, id: String, name: String) {
     use julep_core::protocol::SnapshotCaptureResponse;
     use sha2::{Digest, Sha256};

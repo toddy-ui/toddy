@@ -218,21 +218,14 @@ This workspace contains two crates:
   `iced::daemon` application. Handles stdin/stdout I/O, window
   lifecycle, and the iced event loop.
 
-## Feature flags
+## Capabilities included
 
-| Feature | Default | Description |
-|---------|---------|-------------|
-| `builtin-all` | yes | All built-in widget features |
-| `a11y` | yes | Accessibility via accesskit |
-| `dialogs` | yes | Native file dialog support |
-| `clipboard` | yes | Clipboard read/write |
-| `notifications` | yes | OS notification support |
-| `headless` | no | Headless test backend (no display server needed) |
-| `test-mode` | no | Real windows + test protocol for integration testing |
+All capabilities are compiled in by default -- no feature flags to
+manage. The binary includes all 30+ widget types, accessibility,
+file dialogs, clipboard, notifications, and both test modes.
 
-Individual widget features: `widget-image`, `widget-svg`,
-`widget-canvas`, `widget-markdown`, `widget-highlighter`,
-`widget-sysinfo`, `widget-qr-code`.
+Headless mode (`--headless`) and test mode (`--test`) are runtime
+flags that don't require a special build.
 
 ## Development
 

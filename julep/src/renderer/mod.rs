@@ -17,9 +17,9 @@ use julep_core::message::{
 };
 use julep_core::protocol::{IncomingMessage, OutgoingEvent};
 
-#[cfg(feature = "test-mode")]
+pub(crate) use emitters::emit_hello;
 use emitters::emit_screenshot_response;
-use emitters::{emit_effect_response, emit_event, emit_hello, message_to_event};
+use emitters::{emit_effect_response, emit_event, message_to_event};
 use stdin::{STDIN_RX, read_initial_settings, spawn_stdin_reader, stdin_subscription};
 
 // ---------------------------------------------------------------------------
@@ -232,7 +232,6 @@ impl App {
                 }
                 Task::none()
             }
-            #[cfg(feature = "widget-markdown")]
             Message::MarkdownUrl(url) => {
                 log::debug!("markdown link clicked: {url}");
                 Task::none()
@@ -341,7 +340,6 @@ impl App {
                 emit_event(OutgoingEvent::sensor_resize(id, width, height));
                 Task::none()
             }
-            #[cfg(feature = "widget-canvas")]
             Message::CanvasEvent(id, kind, x, y, extra) => {
                 match kind.as_str() {
                     "press" => emit_event(OutgoingEvent::canvas_press(id, x, y, extra)),
@@ -351,7 +349,6 @@ impl App {
                 }
                 Task::none()
             }
-            #[cfg(feature = "widget-canvas")]
             Message::CanvasScroll(id, cx, cy, dx, dy) => {
                 emit_event(OutgoingEvent::canvas_scroll(id, cx, cy, dx, dy));
                 Task::none()
@@ -465,12 +462,10 @@ impl App {
 
                             return Task::batch(close_tasks);
                         }
-                        #[cfg(feature = "test-mode")]
                         IncomingMessage::SnapshotCapture { id, name, .. } => {
                             crate::test_protocol::handle_snapshot_capture(&self.core, id, name);
                             return Task::none();
                         }
-                        #[cfg(feature = "test-mode")]
                         IncomingMessage::ScreenshotCapture { id, name, .. } => {
                             // Capture real GPU-rendered pixels via iced
                             if let Some((_, &iced_id)) = self.window_map.iter().next() {
@@ -1419,7 +1414,6 @@ pub(crate) fn run(builder: julep_core::app::JulepAppBuilder) -> iced::Result {
         None
     };
 
-    #[cfg(feature = "headless")]
     {
         if args.contains(&"--headless".to_string()) {
             crate::headless::headless_mode::run(forced_codec, builder.build_dispatcher());
@@ -1427,10 +1421,7 @@ pub(crate) fn run(builder: julep_core::app::JulepAppBuilder) -> iced::Result {
         }
     }
 
-    #[cfg(feature = "test-mode")]
     let test_mode = args.contains(&"--test".to_string());
-    #[cfg(not(feature = "test-mode"))]
-    let test_mode = false;
 
     // Read the first message synchronously to get iced settings and font
     // data before the daemon starts. This must happen before the stdin

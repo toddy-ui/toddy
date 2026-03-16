@@ -16,47 +16,15 @@ name = "julep_core"
 path = "src/lib.rs"
 
 [dependencies]
-iced = { version = "0.6", package = "julep-iced", features = ["tokio", "advanced"] }
+iced = { version = "0.6", package = "julep-iced", features = ["tokio", "advanced", "image", "svg", "canvas", "markdown", "highlighter", "sysinfo"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rmp-serde = "1"
 rmpv = { version = "1", features = ["with-serde"] }
 log = "0.4"
-rfd = { version = "0.15", optional = true }
-arboard = { version = "3", optional = true }
-notify-rust = { version = "4", optional = true }
+rfd = "0.15"
+arboard = "3"
+notify-rust = "4"
 base64 = "0.22"
 tokio = { version = "1", features = ["sync"] }
-qrcode = { version = "0.14", optional = true, default-features = false }
-
-[features]
-default = ["builtin-all", "dialogs", "clipboard", "notifications"]
-# Enables all built-in widget features.
-builtin-all = ["widget-image", "widget-svg", "widget-canvas", "widget-markdown", "widget-highlighter", "widget-sysinfo", "widget-qr-code"]
-# Image widget (iced/image).
-widget-image = ["iced/image"]
-# SVG widget (iced/svg).
-widget-svg = ["iced/svg"]
-# Canvas widget -- 2D drawing surface (iced/canvas).
-widget-canvas = ["iced/canvas"]
-# Markdown widget (iced/markdown).
-# Implicitly pulls in iced's built-in markdown parser and its transitive deps.
-widget-markdown = ["iced/markdown"]
-# TextEditor syntax highlighting (iced/highlighter).
-# Implicitly enables syntect-based highlighting inside iced.
-widget-highlighter = ["iced/highlighter"]
-# System info query (iced/sysinfo).
-# Implicitly enables the sysinfo crate inside iced for CPU/memory/OS queries.
-widget-sysinfo = ["iced/sysinfo"]
-# QR code widget.
-# Implicitly depends on widget-canvas: enables iced/canvas for rendering
-# the QR grid, plus the standalone qrcode crate for encoding.
-widget-qr-code = ["iced/canvas", "dep:qrcode"]
-# File dialog support via rfd.
-dialogs = ["rfd"]
-# Clipboard read/write via arboard.
-clipboard = ["arboard"]
-# OS notification support via notify-rust.
-notifications = ["notify-rust"]
-# Accessibility via accesskit.
-a11y = []
+qrcode = { version = "0.14", default-features = false }

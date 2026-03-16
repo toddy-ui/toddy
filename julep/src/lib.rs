@@ -5,10 +5,8 @@
 //! - **Default:** `julep` -- Full iced::daemon with real windows.
 //! - **Headless:** `julep --headless` -- Core + wire protocol only,
 //!   no display server required. Useful for CI and integration testing.
-//!   Requires the `headless` feature.
 //! - **Test mode:** `julep --test` -- Real iced::daemon windows plus
-//!   test protocol messages (Query, Interact, SnapshotCapture). Requires
-//!   the `test-mode` feature.
+//!   test protocol messages (Query, Interact, SnapshotCapture).
 //!
 //! Wire codec auto-detection: the first byte of stdin determines the format
 //! (`{` = JSON, anything else = MessagePack). Override with `--json` or
@@ -16,7 +14,6 @@
 
 #![deny(warnings)]
 
-#[cfg(feature = "headless")]
 mod headless;
 mod test_mode;
 mod test_protocol;

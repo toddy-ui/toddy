@@ -3,7 +3,6 @@
 // Extracted from main.rs so that julep-core modules (widgets, overlay_widget,
 // protocol) can reference Message without depending on the binary crate.
 
-#[cfg(feature = "widget-markdown")]
 use iced::widget::markdown;
 use iced::widget::text_editor;
 use iced::{Point, window};
@@ -50,7 +49,6 @@ pub enum Message {
     /// A text editor action (id, action).
     TextEditorAction(String, text_editor::Action),
     /// A markdown link was clicked.
-    #[cfg(feature = "widget-markdown")]
     MarkdownUrl(markdown::Uri),
     /// A message arrived from the stdin reader (or stdin closed).
     Stdin(StdinEvent),
@@ -110,10 +108,8 @@ pub enum Message {
     /// Sensor widget resize event (id, width, height).
     SensorResize(String, f32, f32),
     /// Canvas interaction event (id, kind, x, y, extra).
-    #[cfg(feature = "widget-canvas")]
     CanvasEvent(String, String, f32, f32, String),
     /// Canvas scroll event (id, cursor_x, cursor_y, delta_x, delta_y).
-    #[cfg(feature = "widget-canvas")]
     CanvasScroll(String, f32, f32, f32, f32),
     /// PaneGrid pane was resized (grid_id, resize_event).
     PaneResized(String, iced::widget::pane_grid::ResizeEvent),

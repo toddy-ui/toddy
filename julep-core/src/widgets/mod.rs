@@ -1,4 +1,3 @@
-#[cfg(feature = "widget-canvas")]
 mod canvas;
 mod display;
 mod helpers;
@@ -11,14 +10,12 @@ mod validate;
 use helpers::*;
 
 // Re-alias iced canvas to avoid shadowing by the `canvas` submodule.
-#[cfg(any(feature = "widget-canvas", feature = "widget-qr-code"))]
 use iced::widget::canvas as iced_canvas;
 
 use std::collections::{HashMap, HashSet};
 
 use crate::protocol::TreeNode;
 use iced::widget::keyed;
-#[cfg(feature = "widget-markdown")]
 use iced::widget::markdown;
 use iced::widget::scrollable::Anchor;
 use iced::widget::text::LineHeight;
@@ -57,7 +54,6 @@ pub struct WidgetCaches {
     /// Tracks the hash of the last-synced "content" prop for each text_editor.
     /// Used to detect host-side prop changes without clobbering user edits.
     pub(crate) editor_content_hashes: HashMap<String, u64>,
-    #[cfg(feature = "widget-markdown")]
     pub(crate) markdown_items: HashMap<String, (u64, Vec<markdown::Item>)>,
     pub(crate) combo_states: HashMap<String, combo_box::State<String>>,
     pub(crate) combo_options: HashMap<String, Vec<String>>,
@@ -65,10 +61,8 @@ pub struct WidgetCaches {
     /// Per-canvas, per-layer geometry caches. Outer key is node ID, inner key
     /// is layer name. The u64 is a content hash of the layer's shapes array --
     /// when it changes the cache is cleared so the layer re-tessellates.
-    #[cfg(feature = "widget-canvas")]
     pub(crate) canvas_caches: HashMap<String, HashMap<String, (u64, iced_canvas::Cache)>>,
     /// Per-qr_code caches. Key is node ID, value is (content hash, canvas Cache).
-    #[cfg(feature = "widget-qr-code")]
     pub(crate) qr_code_caches: HashMap<String, (u64, iced_canvas::Cache)>,
     pub(crate) default_text_size: Option<f32>,
     pub(crate) default_font: Option<Font>,
@@ -86,14 +80,11 @@ impl WidgetCaches {
         Self {
             editor_contents: HashMap::new(),
             editor_content_hashes: HashMap::new(),
-            #[cfg(feature = "widget-markdown")]
             markdown_items: HashMap::new(),
             combo_states: HashMap::new(),
             combo_options: HashMap::new(),
             pane_grid_states: HashMap::new(),
-            #[cfg(feature = "widget-canvas")]
             canvas_caches: HashMap::new(),
-            #[cfg(feature = "widget-qr-code")]
             qr_code_caches: HashMap::new(),
             default_text_size: None,
             default_font: None,
@@ -133,14 +124,11 @@ impl WidgetCaches {
     pub fn clear_builtin(&mut self) {
         self.editor_contents.clear();
         self.editor_content_hashes.clear();
-        #[cfg(feature = "widget-markdown")]
         self.markdown_items.clear();
         self.combo_states.clear();
         self.combo_options.clear();
         self.pane_grid_states.clear();
-        #[cfg(feature = "widget-canvas")]
         self.canvas_caches.clear();
-        #[cfg(feature = "widget-qr-code")]
         self.qr_code_caches.clear();
     }
 }
@@ -197,7 +185,6 @@ fn ensure_caches_walk(
             // If hash matches, Content is already initialized and we preserve
             // any user edits that happened since the last prop sync.
         }
-        #[cfg(feature = "widget-markdown")]
         "markdown" => {
             let props = node.props.as_object();
             let content = prop_str(props, "content").unwrap_or_default();
@@ -285,7 +272,6 @@ fn ensure_caches_walk(
                 caches.pane_grid_states.insert(node.id.clone(), new_state);
             }
         }
-        #[cfg(feature = "widget-canvas")]
         "canvas" => {
             let props = node.props.as_object();
             // Build layer map: either from "layers" (object) or "shapes" (array -> single layer).
@@ -316,7 +302,6 @@ fn ensure_caches_walk(
             // Remove stale layers that are no longer in the tree.
             node_caches.retain(|name, _| layer_map.contains_key(name));
         }
-        #[cfg(feature = "widget-qr-code")]
         "qr_code" => {
             let props = node.props.as_object();
             let data = prop_str(props, "data").unwrap_or_default();
@@ -358,16 +343,13 @@ fn prune_all_stale_caches(live_ids: &HashSet<String>, caches: &mut WidgetCaches)
     caches
         .editor_content_hashes
         .retain(|id, _| live_ids.contains(id));
-    #[cfg(feature = "widget-markdown")]
     caches.markdown_items.retain(|id, _| live_ids.contains(id));
     caches.combo_states.retain(|id, _| live_ids.contains(id));
     caches.combo_options.retain(|id, _| live_ids.contains(id));
     caches
         .pane_grid_states
         .retain(|id, _| live_ids.contains(id));
-    #[cfg(feature = "widget-canvas")]
     caches.canvas_caches.retain(|id, _| live_ids.contains(id));
-    #[cfg(feature = "widget-qr-code")]
     caches.qr_code_caches.retain(|id, _| live_ids.contains(id));
 }
 
@@ -440,22 +422,10 @@ pub fn render<'a>(
         "space" => display::render_space(node),
         "rule" => display::render_rule(node),
         "progress_bar" => display::render_progress_bar(node),
-        #[cfg(feature = "widget-image")]
         "image" => display::render_image(node, images),
-        #[cfg(not(feature = "widget-image"))]
-        "image" => render_feature_disabled("image", "widget-image"),
-        #[cfg(feature = "widget-svg")]
         "svg" => display::render_svg(node),
-        #[cfg(not(feature = "widget-svg"))]
-        "svg" => render_feature_disabled("svg", "widget-svg"),
-        #[cfg(feature = "widget-markdown")]
         "markdown" => display::render_markdown(node, caches, theme),
-        #[cfg(not(feature = "widget-markdown"))]
-        "markdown" => render_feature_disabled("markdown", "widget-markdown"),
-        #[cfg(feature = "widget-qr-code")]
         "qr_code" => display::render_qr_code(node, caches),
-        #[cfg(not(feature = "widget-qr-code"))]
-        "qr_code" => render_feature_disabled("qr_code", "widget-qr-code"),
         // Input widgets
         "text_input" => input::render_text_input(node, caches),
         "text_editor" => input::render_text_editor(node, caches),
@@ -475,10 +445,7 @@ pub fn render<'a>(
         "window" => interactive::render_window(node, caches, images, theme, dispatcher),
         "overlay" => interactive::render_overlay(node, caches, images, theme, dispatcher),
         // Canvas
-        #[cfg(feature = "widget-canvas")]
         "canvas" => canvas::render_canvas(node, caches, images, theme, dispatcher),
-        #[cfg(not(feature = "widget-canvas"))]
-        "canvas" => render_feature_disabled("canvas", "widget-canvas"),
         // Table
         "table" => table::render_table(node),
         // Extension dispatch
@@ -544,31 +511,11 @@ pub fn render<'a>(
         }
     };
 
-    #[cfg(feature = "a11y")]
     if let Some(overrides) = crate::a11y_widget::A11yOverrides::from_props(&node.props) {
         return crate::a11y_widget::A11yOverride::wrap(element, overrides).into();
     }
 
     element
-}
-
-#[cfg(not(all(
-    feature = "widget-image",
-    feature = "widget-svg",
-    feature = "widget-canvas",
-    feature = "widget-markdown",
-    feature = "widget-qr-code"
-)))]
-fn render_feature_disabled<'a>(widget_name: &str, feature_name: &str) -> Element<'a, Message> {
-    log::warn!(
-        "widget `{widget_name}` requires feature `{feature_name}` -- \
-         enable it with: cargo build --features {feature_name}"
-    );
-    iced::widget::text(format!(
-        "Widget '{}' requires feature '{}'",
-        widget_name, feature_name
-    ))
-    .into()
 }
 
 // ---------------------------------------------------------------------------
@@ -592,7 +539,6 @@ fn render_children<'a>(
 // Canvas cache helpers (used by ensure_caches)
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "widget-canvas")]
 /// Build a sorted layer map from canvas props. Supports two prop formats:
 /// - `"layers"`: a JSON object mapping layer_name -> array of shapes (preferred)
 /// - `"shapes"`: a flat JSON array of shapes (legacy, wrapped as a single "default" layer)
@@ -686,7 +632,6 @@ mod tests {
     fn widget_caches_new_is_empty() {
         let c = WidgetCaches::new();
         assert!(c.editor_contents.is_empty());
-        #[cfg(feature = "widget-markdown")]
         assert!(c.markdown_items.is_empty());
         assert!(c.combo_states.is_empty());
         assert!(c.combo_options.is_empty());
@@ -709,7 +654,6 @@ mod tests {
 
     // -- Image registry handle lookup --
 
-    #[cfg(feature = "widget-image")]
     #[test]
     fn image_registry_handle_lookup() {
         use crate::image_registry::ImageRegistry;

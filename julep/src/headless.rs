@@ -1,4 +1,3 @@
-#[cfg(feature = "headless")]
 pub mod headless_mode {
     use std::io::{self, BufRead};
 
@@ -197,12 +196,10 @@ pub mod headless_mode {
             } => {
                 let w = width
                     .unwrap_or(DEFAULT_SCREENSHOT_WIDTH)
-                    .max(1)
-                    .min(MAX_SCREENSHOT_DIMENSION);
+                    .clamp(1, MAX_SCREENSHOT_DIMENSION);
                 let h = height
                     .unwrap_or(DEFAULT_SCREENSHOT_HEIGHT)
-                    .max(1)
-                    .min(MAX_SCREENSHOT_DIMENSION);
+                    .clamp(1, MAX_SCREENSHOT_DIMENSION);
                 handle_screenshot_capture(core, theme, dispatcher, id, name, w, h);
             }
             IncomingMessage::Reset { id } => {

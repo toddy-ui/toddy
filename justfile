@@ -39,21 +39,6 @@ build:
 build-release:
     cargo build --release --workspace
 
-build-headless:
-    cargo build --features headless
-
-build-test-mode:
-    cargo build --features test-mode
-
-build-no-a11y:
-    cargo build --no-default-features --features builtin-all,dialogs,clipboard,notifications
-
-# === Test Variants ===
-
-test-features:
-    cargo nextest run --workspace --features headless
-    cargo nextest run --workspace --features test-mode
-
 coverage:
     #!/usr/bin/env bash
     if command -v cargo-llvm-cov &>/dev/null; then
