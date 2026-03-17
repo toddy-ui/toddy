@@ -25,16 +25,28 @@ fn path_to_json_string(path: &std::path::Path) -> String {
 
 /// Returns true for effect kinds that should run asynchronously (file dialogs).
 pub fn is_async_effect(kind: &str) -> bool {
-    matches!(kind, "file_open" | "file_save" | "directory_select")
+    matches!(
+        kind,
+        "file_open"
+            | "file_open_multiple"
+            | "file_save"
+            | "directory_select"
+            | "directory_select_multiple"
+    )
 }
 
 pub fn handle_effect(id: String, kind: &str, payload: &Value) -> EffectResponse {
     match kind {
         "file_open" => handle_file_open(id, payload),
+        "file_open_multiple" => handle_file_open_multiple(id, payload),
         "file_save" => handle_file_save(id, payload),
         "directory_select" => handle_directory_select(id, payload),
+        "directory_select_multiple" => handle_directory_select_multiple(id, payload),
         "clipboard_read" => handle_clipboard_read(id),
         "clipboard_write" => handle_clipboard_write(id, payload),
+        "clipboard_read_html" => handle_clipboard_read_html(id),
+        "clipboard_write_html" => handle_clipboard_write_html(id, payload),
+        "clipboard_clear" => handle_clipboard_clear(id),
         "clipboard_read_primary" => handle_clipboard_read_primary(id),
         "clipboard_write_primary" => handle_clipboard_write_primary(id, payload),
         "notification" => handle_notification(id, payload),
@@ -88,6 +100,47 @@ fn handle_file_open(id: String, payload: &Value) -> EffectResponse {
 
     match dialog.pick_file() {
         Some(path) => EffectResponse::ok(id, json!({"path": path_to_json_string(&path)})),
+        None => EffectResponse::error(id, "cancelled".to_string()),
+    }
+}
+
+/// Synchronous multi-file open dialog. Used when the async runtime is unavailable.
+///
+/// **WARNING (macOS):** Sync file dialogs may deadlock if called on the main
+/// thread because macOS requires native dialogs to run on the main thread.
+/// Prefer `handle_async_effect` when a tokio runtime is available.
+fn handle_file_open_multiple(id: String, payload: &Value) -> EffectResponse {
+    let title = payload
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Open Files");
+
+    let mut dialog = rfd::FileDialog::new().set_title(title);
+
+    if let Some(filters) = payload.get("filters").and_then(|v| v.as_array()) {
+        for filter in filters {
+            if let Some(arr) = filter.as_array()
+                && arr.len() >= 2
+                && let (Some(name), Some(ext)) = (arr[0].as_str(), arr[1].as_str())
+            {
+                let extensions: Vec<&str> = ext
+                    .split(';')
+                    .map(|e| e.trim().trim_start_matches("*."))
+                    .collect();
+                dialog = dialog.add_filter(name, &extensions);
+            }
+        }
+    }
+
+    if let Some(dir) = payload.get("directory").and_then(|v| v.as_str()) {
+        dialog = dialog.set_directory(dir);
+    }
+
+    match dialog.pick_files() {
+        Some(paths) => {
+            let paths: Vec<String> = paths.iter().map(|p| path_to_json_string(p)).collect();
+            EffectResponse::ok(id, json!({"paths": paths}))
+        }
         None => EffectResponse::error(id, "cancelled".to_string()),
     }
 }
@@ -149,6 +202,28 @@ fn handle_directory_select(id: String, payload: &Value) -> EffectResponse {
     }
 }
 
+/// Synchronous multi-directory select dialog. Used when the async runtime is unavailable.
+///
+/// **WARNING (macOS):** Sync file dialogs may deadlock if called on the main
+/// thread because macOS requires native dialogs to run on the main thread.
+/// Prefer `handle_async_effect` when a tokio runtime is available.
+fn handle_directory_select_multiple(id: String, payload: &Value) -> EffectResponse {
+    let title = payload
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Select Directories");
+
+    let dialog = rfd::FileDialog::new().set_title(title);
+
+    match dialog.pick_folders() {
+        Some(paths) => {
+            let paths: Vec<String> = paths.iter().map(|p| path_to_json_string(p)).collect();
+            EffectResponse::ok(id, json!({"paths": paths}))
+        }
+        None => EffectResponse::error(id, "cancelled".to_string()),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Clipboard (arboard crate)
 //
@@ -206,6 +281,42 @@ fn handle_clipboard_write(id: String, payload: &Value) -> EffectResponse {
     with_clipboard(&id, |clipboard, id| match clipboard.set_text(text) {
         Ok(()) => EffectResponse::ok(id.to_string(), json!(null)),
         Err(e) => EffectResponse::error(id.to_string(), format!("clipboard write failed: {e}")),
+    })
+}
+
+fn handle_clipboard_read_html(id: String) -> EffectResponse {
+    with_clipboard(&id, |clipboard, id| match clipboard.get().html() {
+        Ok(html) => EffectResponse::ok(id.to_string(), json!({"html": html})),
+        Err(e) => EffectResponse::error(id.to_string(), format!("clipboard read html failed: {e}")),
+    })
+}
+
+fn handle_clipboard_write_html(id: String, payload: &Value) -> EffectResponse {
+    let html = payload
+        .get("html")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let alt_text = payload
+        .get("alt_text")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    with_clipboard(&id, |clipboard, id| {
+        match clipboard.set_html(&html, alt_text.as_ref()) {
+            Ok(()) => EffectResponse::ok(id.to_string(), json!(null)),
+            Err(e) => {
+                EffectResponse::error(id.to_string(), format!("clipboard write html failed: {e}"))
+            }
+        }
+    })
+}
+
+fn handle_clipboard_clear(id: String) -> EffectResponse {
+    with_clipboard(&id, |clipboard, id| match clipboard.clear() {
+        Ok(()) => EffectResponse::ok(id.to_string(), json!(null)),
+        Err(e) => EffectResponse::error(id.to_string(), format!("clipboard clear failed: {e}")),
     })
 }
 
@@ -286,11 +397,31 @@ fn handle_notification(id: String, payload: &Value) -> EffectResponse {
 
     let body = payload.get("body").and_then(|v| v.as_str()).unwrap_or("");
 
-    match notify_rust::Notification::new()
-        .summary(title)
-        .body(body)
-        .show()
-    {
+    let mut notification = notify_rust::Notification::new();
+    notification.summary(title).body(body);
+
+    if let Some(icon) = payload.get("icon").and_then(|v| v.as_str()) {
+        notification.icon(icon);
+    }
+
+    if let Some(timeout_ms) = payload.get("timeout").and_then(|v| v.as_i64()) {
+        notification.timeout(notify_rust::Timeout::Milliseconds(timeout_ms as u32));
+    }
+
+    if let Some(urgency) = payload.get("urgency").and_then(|v| v.as_str()) {
+        let u = match urgency {
+            "low" => notify_rust::Urgency::Low,
+            "critical" => notify_rust::Urgency::Critical,
+            _ => notify_rust::Urgency::Normal,
+        };
+        notification.urgency(u);
+    }
+
+    if let Some(sound) = payload.get("sound").and_then(|v| v.as_str()) {
+        notification.sound_name(sound);
+    }
+
+    match notification.show() {
         Ok(_) => EffectResponse::ok(id, json!(null)),
         Err(e) => EffectResponse::error(id, format!("notification failed: {e}")),
     }
@@ -338,6 +469,44 @@ pub async fn handle_async_effect(id: String, effect_type: &str, params: &Value) 
             match dialog.pick_file().await {
                 Some(handle) => {
                     EffectResponse::ok(id, json!({"path": path_to_json_string(handle.path())}))
+                }
+                None => EffectResponse::error(id, "cancelled".to_string()),
+            }
+        }
+        "file_open_multiple" => {
+            let title = params
+                .get("title")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Open Files");
+
+            let mut dialog = rfd::AsyncFileDialog::new().set_title(title);
+
+            if let Some(filters) = params.get("filters").and_then(|v| v.as_array()) {
+                for filter in filters {
+                    if let Some(arr) = filter.as_array()
+                        && arr.len() >= 2
+                        && let (Some(name), Some(ext)) = (arr[0].as_str(), arr[1].as_str())
+                    {
+                        let extensions: Vec<&str> = ext
+                            .split(';')
+                            .map(|e| e.trim().trim_start_matches("*."))
+                            .collect();
+                        dialog = dialog.add_filter(name, &extensions);
+                    }
+                }
+            }
+
+            if let Some(dir) = params.get("directory").and_then(|v| v.as_str()) {
+                dialog = dialog.set_directory(dir);
+            }
+
+            match dialog.pick_files().await {
+                Some(handles) => {
+                    let paths: Vec<String> = handles
+                        .iter()
+                        .map(|h| path_to_json_string(h.path()))
+                        .collect();
+                    EffectResponse::ok(id, json!({"paths": paths}))
                 }
                 None => EffectResponse::error(id, "cancelled".to_string()),
             }
@@ -391,6 +560,25 @@ pub async fn handle_async_effect(id: String, effect_type: &str, params: &Value) 
                 None => EffectResponse::error(id, "cancelled".to_string()),
             }
         }
+        "directory_select_multiple" => {
+            let title = params
+                .get("title")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Select Directories");
+
+            let dialog = rfd::AsyncFileDialog::new().set_title(title);
+
+            match dialog.pick_folders().await {
+                Some(handles) => {
+                    let paths: Vec<String> = handles
+                        .iter()
+                        .map(|h| path_to_json_string(h.path()))
+                        .collect();
+                    EffectResponse::ok(id, json!({"paths": paths}))
+                }
+                None => EffectResponse::error(id, "cancelled".to_string()),
+            }
+        }
         _ => EffectResponse::unsupported(id),
     }
 }
@@ -422,16 +610,27 @@ mod tests {
     fn dispatch_routes_all_known_kinds_without_panic() {
         let kinds_with_payloads: Vec<(&str, Value)> = vec![
             ("file_open", json!({"title": "Pick a file"})),
+            ("file_open_multiple", json!({"title": "Pick files"})),
             (
                 "file_save",
                 json!({"title": "Save", "default_name": "out.txt"}),
             ),
             ("directory_select", json!({"title": "Choose dir"})),
+            ("directory_select_multiple", json!({"title": "Choose dirs"})),
             ("clipboard_read", json!({})),
             ("clipboard_write", json!({"text": "hello"})),
+            ("clipboard_read_html", json!({})),
+            (
+                "clipboard_write_html",
+                json!({"html": "<b>hi</b>", "alt_text": "hi"}),
+            ),
+            ("clipboard_clear", json!({})),
             ("clipboard_read_primary", json!({})),
             ("clipboard_write_primary", json!({"text": "primary"})),
-            ("notification", json!({"title": "Test", "body": "body"})),
+            (
+                "notification",
+                json!({"title": "Test", "body": "body", "icon": "dialog-information", "timeout": 3000, "urgency": "low", "sound": "message-new-instant"}),
+            ),
         ];
 
         for (kind, payload) in &kinds_with_payloads {
@@ -455,10 +654,15 @@ mod tests {
     fn handlers_tolerate_empty_payloads() {
         let kinds: &[&str] = &[
             "file_open",
+            "file_open_multiple",
             "file_save",
             "directory_select",
+            "directory_select_multiple",
             "clipboard_read",
             "clipboard_write",
+            "clipboard_read_html",
+            "clipboard_write_html",
+            "clipboard_clear",
             "clipboard_read_primary",
             "clipboard_write_primary",
             "notification",
@@ -496,14 +700,19 @@ mod tests {
     #[test]
     fn async_effects_recognized() {
         assert!(is_async_effect("file_open"));
+        assert!(is_async_effect("file_open_multiple"));
         assert!(is_async_effect("file_save"));
         assert!(is_async_effect("directory_select"));
+        assert!(is_async_effect("directory_select_multiple"));
     }
 
     #[test]
     fn sync_effects_not_async() {
         assert!(!is_async_effect("clipboard_read"));
         assert!(!is_async_effect("clipboard_write"));
+        assert!(!is_async_effect("clipboard_read_html"));
+        assert!(!is_async_effect("clipboard_write_html"));
+        assert!(!is_async_effect("clipboard_clear"));
         assert!(!is_async_effect("clipboard_read_primary"));
         assert!(!is_async_effect("clipboard_write_primary"));
         assert!(!is_async_effect("notification"));
