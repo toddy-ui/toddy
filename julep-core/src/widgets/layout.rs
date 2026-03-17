@@ -304,6 +304,11 @@ pub(crate) fn render_grid<'a>(
         g = g.height(row_height);
     }
 
+    // Fluid mode: auto-wrap columns with a max cell width
+    if let Some(max_w) = prop_f32(props, "fluid") {
+        g = g.fluid(max_w);
+    }
+
     g.into()
 }
 

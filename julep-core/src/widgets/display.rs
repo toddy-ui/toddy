@@ -57,6 +57,9 @@ pub(crate) fn render_text<'a>(
     if let Some(shaping) = parse_shaping(props) {
         t = t.shaping(shaping);
     }
+    if let Some(e) = parse_ellipsis(props) {
+        t = t.ellipsis(e);
+    }
 
     // Named style
     if let Some(style_name) = prop_str(props, "style") {
@@ -179,6 +182,12 @@ pub(crate) fn render_rich_text<'a>(
     }
     if let Some(lh) = parse_line_height(props) {
         rt = rt.line_height(lh);
+    }
+    if let Some(w) = parse_wrapping(props) {
+        rt = rt.wrapping(w);
+    }
+    if let Some(e) = parse_ellipsis(props) {
+        rt = rt.ellipsis(e);
     }
 
     rt = rt.on_link_click(move |link| Message::Click(format!("{}:{}", id, link)));
