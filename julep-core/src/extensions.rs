@@ -1,10 +1,23 @@
+//! Widget extension system.
+//!
+//! Extensions let Rust crates add custom widget types to the julep
+//! renderer. Each extension implements [`WidgetExtension`] and is
+//! registered at startup via [`JulepAppBuilder`](crate::app::JulepAppBuilder).
+//! The [`ExtensionDispatcher`] routes incoming messages and render
+//! calls to the correct extension based on node type names.
+//!
+//! State is managed through [`ExtensionCaches`], a type-erased
+//! key-value store namespaced by extension. Mutation happens in
+//! `prepare()` / `handle_event()` / `handle_command()` (mutable
+//! phase), reads happen in `render()` (immutable phase), matching
+//! iced's `update()`/`view()` split.
+
 use std::any::Any;
 use std::collections::HashMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use iced::{Element, Theme};
-use log;
 use serde_json::Value;
 
 use crate::image_registry::ImageRegistry;
@@ -85,8 +98,6 @@ pub(crate) fn catch_unwind_enabled() -> bool {
 /// receives read-only access via `WidgetEnv.caches`. This split matches
 /// iced's `update()`/`view()` separation -- mutation happens in `update`,
 /// reads in `view`.
-///
-/// # Examples
 ///
 /// # Prop helpers
 ///
@@ -293,9 +304,9 @@ impl ExtensionCaches {
             .expect("downcast must succeed: entry was just inserted with correct type")
     }
 
-    pub fn insert<T: Send + Sync + 'static>(&mut self, namespace: &str, key: String, value: T) {
+    pub fn insert<T: Send + Sync + 'static>(&mut self, namespace: &str, key: &str, value: T) {
         self.inner
-            .insert(Self::namespaced_key(namespace, &key), Box::new(value));
+            .insert(Self::namespaced_key(namespace, key), Box::new(value));
     }
 
     pub fn remove(&mut self, namespace: &str, key: &str) -> bool {
@@ -382,7 +393,12 @@ impl<'a> RenderContext<'a> {
 /// Number of consecutive render panics before an extension is poisoned.
 const RENDER_PANIC_THRESHOLD: u32 = 3;
 
-/// Owns extensions and routing state.
+/// Owns registered extensions and routes messages to them.
+///
+/// Maintains a type-name index for O(1) dispatch, a node-to-extension
+/// map for event/command routing, and per-extension poison state for
+/// panic isolation. Created via
+/// [`JulepAppBuilder::build_dispatcher`](crate::app::JulepAppBuilder::build_dispatcher).
 pub struct ExtensionDispatcher {
     extensions: Vec<Box<dyn WidgetExtension>>,
     type_name_index: HashMap<String, usize>,
@@ -470,9 +486,8 @@ impl ExtensionDispatcher {
         self.type_name_index.contains_key(type_name)
     }
 
-    /// Maximum tree recursion depth for walk_prepare. Must match
-    /// `MAX_TREE_DEPTH` in widgets.rs.
-    const MAX_WALK_DEPTH: usize = 256;
+    /// Maximum tree recursion depth for walk_prepare.
+    const MAX_WALK_DEPTH: usize = crate::widgets::MAX_TREE_DEPTH;
 
     /// Called after Core::apply() on tree changes.
     pub fn prepare_all(&mut self, root: &TreeNode, caches: &mut ExtensionCaches, theme: &Theme) {
@@ -1049,7 +1064,7 @@ mod tests {
     #[test]
     fn cache_insert_and_get() {
         let mut caches = ExtensionCaches::new();
-        caches.insert("charts", "node1".to_string(), 42u32);
+        caches.insert("charts", "node1", 42u32);
 
         assert_eq!(caches.get::<u32>("charts", "node1"), Some(&42));
         assert_eq!(caches.get::<u32>("charts", "node2"), None);
@@ -1058,7 +1073,7 @@ mod tests {
     #[test]
     fn cache_get_mut() {
         let mut caches = ExtensionCaches::new();
-        caches.insert("ns", "key".to_string(), vec![1, 2, 3]);
+        caches.insert("ns", "key", vec![1, 2, 3]);
 
         if let Some(v) = caches.get_mut::<Vec<i32>>("ns", "key") {
             v.push(4);
@@ -1080,7 +1095,7 @@ mod tests {
     #[test]
     fn cache_get_or_insert_type_mismatch_replaces_with_default() {
         let mut caches = ExtensionCaches::new();
-        caches.insert("ns", "key".to_string(), 42u32);
+        caches.insert("ns", "key", 42u32);
         // Previously this panicked. Now it logs a warning, replaces the
         // stale entry, and returns a fresh default of the requested type.
         let val = caches.get_or_insert::<String>("ns", "key", || "replaced".to_string());
@@ -1090,7 +1105,7 @@ mod tests {
     #[test]
     fn cache_wrong_type_returns_none() {
         let mut caches = ExtensionCaches::new();
-        caches.insert("ns", "key".to_string(), 42u32);
+        caches.insert("ns", "key", 42u32);
 
         // Asking for a different type returns None (not a panic for get).
         assert_eq!(caches.get::<String>("ns", "key"), None);
@@ -1099,7 +1114,7 @@ mod tests {
     #[test]
     fn cache_remove_and_contains() {
         let mut caches = ExtensionCaches::new();
-        caches.insert("ns", "key".to_string(), 1u8);
+        caches.insert("ns", "key", 1u8);
 
         assert!(caches.contains("ns", "key"));
         assert!(caches.remove("ns", "key"));
@@ -1110,8 +1125,8 @@ mod tests {
     #[test]
     fn cache_clear_removes_everything() {
         let mut caches = ExtensionCaches::new();
-        caches.insert("a", "k1".to_string(), 1u32);
-        caches.insert("b", "k2".to_string(), 2u32);
+        caches.insert("a", "k1", 1u32);
+        caches.insert("b", "k2", 2u32);
 
         caches.clear();
         assert!(!caches.contains("a", "k1"));
@@ -1125,8 +1140,8 @@ mod tests {
         let mut caches = ExtensionCaches::new();
 
         // Two extensions use the same raw key "data" -- they shouldn't collide.
-        caches.insert("charts", "data".to_string(), vec![1.0f64, 2.0, 3.0]);
-        caches.insert("gauges", "data".to_string(), 42u32);
+        caches.insert("charts", "data", vec![1.0f64, 2.0, 3.0]);
+        caches.insert("gauges", "data", 42u32);
 
         assert_eq!(
             caches.get::<Vec<f64>>("charts", "data"),
@@ -1138,9 +1153,9 @@ mod tests {
     #[test]
     fn cache_remove_namespace() {
         let mut caches = ExtensionCaches::new();
-        caches.insert("charts", "a".to_string(), 1u32);
-        caches.insert("charts", "b".to_string(), 2u32);
-        caches.insert("gauges", "a".to_string(), 3u32);
+        caches.insert("charts", "a", 1u32);
+        caches.insert("charts", "b", 2u32);
+        caches.insert("gauges", "a", 3u32);
 
         caches.remove_namespace("charts");
 
@@ -1456,7 +1471,7 @@ mod tests {
         let mut root = make_node("root", "column");
         root.children.push(make_node("s1", "sparkline"));
         dispatcher.prepare_all(&root, &mut caches, &Theme::Dark);
-        caches.insert("charts", "s1".to_string(), 42u32);
+        caches.insert("charts", "s1", 42u32);
         assert!(caches.contains("charts", "s1"));
 
         // reset() should clean up everything.

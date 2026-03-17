@@ -586,9 +586,7 @@ mod tests {
         let mut core = Core::new();
 
         // Simulate extension storing data in extension caches.
-        core.caches
-            .extension
-            .insert("ext", "node-1".to_string(), 42u32);
+        core.caches.extension.insert("ext", "node-1", 42u32);
 
         // Snapshot replaces the tree.
         let msg = IncomingMessage::Snapshot {

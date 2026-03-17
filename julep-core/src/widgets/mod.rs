@@ -38,10 +38,10 @@ use std::time::Duration;
 use crate::extensions::ExtensionDispatcher;
 use crate::message::Message;
 
-/// Maximum tree recursion depth for render, ensure_caches, and tree walks.
+/// Maximum recursion depth for tree walks (render, ensure_caches, prepare).
 /// Prevents stack overflow from pathologically nested trees. Normal UI trees
 /// rarely exceed 20-30 levels; 256 is generous.
-const MAX_TREE_DEPTH: usize = 256;
+pub(crate) const MAX_TREE_DEPTH: usize = 256;
 
 // ---------------------------------------------------------------------------
 // Widget caches
@@ -745,7 +745,7 @@ mod tests {
         caches
             .editor_contents
             .insert("ed1".to_string(), iced::widget::text_editor::Content::new());
-        caches.extension.insert("ext", "key".to_string(), 42u32);
+        caches.extension.insert("ext", "key", 42u32);
 
         caches.clear_builtin();
 
@@ -762,7 +762,7 @@ mod tests {
         caches
             .editor_contents
             .insert("ed1".to_string(), iced::widget::text_editor::Content::new());
-        caches.extension.insert("ext", "key".to_string(), 42u32);
+        caches.extension.insert("ext", "key", 42u32);
 
         caches.clear();
 

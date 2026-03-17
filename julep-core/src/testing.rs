@@ -152,7 +152,7 @@ mod tests {
     #[test]
     fn test_ext_caches_insert_and_get() {
         let mut c = ext_caches();
-        c.insert("ns", "counter".to_string(), 42u32);
+        c.insert("ns", "counter", 42u32);
         assert_eq!(c.get::<u32>("ns", "counter"), Some(&42));
         assert!(c.contains("ns", "counter"));
     }
@@ -251,7 +251,7 @@ mod tests {
         use crate::extensions::GenerationCounter;
 
         let mut caches = ext_caches();
-        caches.insert("spark", "spark-1:gen".to_string(), GenerationCounter::new());
+        caches.insert("spark", "spark-1:gen", GenerationCounter::new());
 
         let counter = caches
             .get_mut::<GenerationCounter>("spark", "spark-1:gen")
