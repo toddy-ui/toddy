@@ -1,9 +1,13 @@
 //! # julep-core
 //!
-//! Core library for the julep renderer. This crate provides the rendering
-//! engine, wire protocol handling, widget infrastructure, and the extension
-//! SDK that powers the `julep` binary. The host process drives state and
-//! logic; this crate turns UI tree descriptions into native iced widgets.
+//! The public SDK for julep. Extension authors depend on this crate to
+//! implement the [`WidgetExtension`](extensions::WidgetExtension) trait
+//! and build custom native widgets. The [`prelude`] module re-exports
+//! everything an extension needs; [`iced`] is re-exported so extensions
+//! don't need a direct iced dependency.
+//!
+//! This crate also provides the rendering engine, wire protocol, and
+//! widget infrastructure used internally by the `julep` binary.
 //!
 //! ## Module guide
 //!
