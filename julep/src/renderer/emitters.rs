@@ -1,5 +1,7 @@
 use std::io::{self, Write};
 
+use iced::Task;
+
 use julep_core::codec::Codec;
 use julep_core::message::Message;
 use julep_core::protocol::OutgoingEvent;
@@ -26,6 +28,17 @@ pub(crate) fn write_stdout(bytes: &[u8]) -> io::Result<()> {
 // ---------------------------------------------------------------------------
 // stdout event emitter
 // ---------------------------------------------------------------------------
+
+/// Emit an event to stdout. On failure, log and return an exit task.
+/// This is the standard error-handling pattern for event emission --
+/// a broken stdout pipe means the host is gone and we should shut down.
+pub(crate) fn emit_or_exit(event: OutgoingEvent) -> Task<Message> {
+    if let Err(e) = emit_event(event) {
+        log::error!("write error: {e}");
+        return iced::exit();
+    }
+    Task::none()
+}
 
 pub(crate) fn emit_event(event: OutgoingEvent) -> io::Result<()> {
     let codec = Codec::get_global();
