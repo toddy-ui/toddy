@@ -4,8 +4,19 @@
 // messages from stdin. The logic is identical; only the surrounding event loop
 // differs. This module contains the canonical implementations so the two modes
 // stay in sync.
+//
+// Event construction functions (parse_iced_key, parse_iced_modifiers,
+// make_key_pressed, make_key_released, interaction_to_iced_events) also live
+// here. Both the daemon renderer and headless mode use them to translate
+// scripting protocol interactions into iced events.
 
 use std::io::{self, Write};
+
+use iced::keyboard::{self, Key, Modifiers};
+use iced::mouse;
+use iced::{Event, Point};
+
+use iced_test::core::SmolStr;
 
 use serde_json::Value;
 
@@ -105,6 +116,209 @@ pub fn parse_key_and_modifiers(
             "shift": false, "ctrl": false, "alt": false, "logo": false,
         });
         (raw_key, modifiers)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Key string -> iced Key conversion
+// ---------------------------------------------------------------------------
+
+/// Convert a key name string (as sent by the scripting protocol) to an iced
+/// `keyboard::Key`. Named keys use their Debug format (e.g. "Enter",
+/// "Tab", "ArrowUp"); single characters become `Key::Character`.
+pub(crate) fn parse_iced_key(name: &str) -> Key {
+    match name {
+        "Enter" | "enter" | "Return" | "return" => Key::Named(keyboard::key::Named::Enter),
+        "Tab" | "tab" => Key::Named(keyboard::key::Named::Tab),
+        "Space" | "space" | " " => Key::Named(keyboard::key::Named::Space),
+        "Backspace" | "backspace" => Key::Named(keyboard::key::Named::Backspace),
+        "Delete" | "delete" => Key::Named(keyboard::key::Named::Delete),
+        "Escape" | "escape" | "Esc" | "esc" => Key::Named(keyboard::key::Named::Escape),
+        "ArrowUp" | "Up" | "up" => Key::Named(keyboard::key::Named::ArrowUp),
+        "ArrowDown" | "Down" | "down" => Key::Named(keyboard::key::Named::ArrowDown),
+        "ArrowLeft" | "Left" | "left" => Key::Named(keyboard::key::Named::ArrowLeft),
+        "ArrowRight" | "Right" | "right" => Key::Named(keyboard::key::Named::ArrowRight),
+        "Home" | "home" => Key::Named(keyboard::key::Named::Home),
+        "End" | "end" => Key::Named(keyboard::key::Named::End),
+        "PageUp" | "pageup" => Key::Named(keyboard::key::Named::PageUp),
+        "PageDown" | "pagedown" => Key::Named(keyboard::key::Named::PageDown),
+        "F1" => Key::Named(keyboard::key::Named::F1),
+        "F2" => Key::Named(keyboard::key::Named::F2),
+        "F3" => Key::Named(keyboard::key::Named::F3),
+        "F4" => Key::Named(keyboard::key::Named::F4),
+        "F5" => Key::Named(keyboard::key::Named::F5),
+        "F6" => Key::Named(keyboard::key::Named::F6),
+        "F7" => Key::Named(keyboard::key::Named::F7),
+        "F8" => Key::Named(keyboard::key::Named::F8),
+        "F9" => Key::Named(keyboard::key::Named::F9),
+        "F10" => Key::Named(keyboard::key::Named::F10),
+        "F11" => Key::Named(keyboard::key::Named::F11),
+        "F12" => Key::Named(keyboard::key::Named::F12),
+        s if s.len() == 1 => Key::Character(SmolStr::new(s)),
+        s => {
+            // Try lowercase single char
+            let lower = s.to_lowercase();
+            if lower.chars().count() == 1 {
+                Key::Character(SmolStr::new(&lower))
+            } else {
+                Key::Character(SmolStr::new(s))
+            }
+        }
+    }
+}
+
+/// Build iced `Modifiers` from parsed scripting protocol modifiers JSON.
+pub(crate) fn parse_iced_modifiers(mods: &Value) -> Modifiers {
+    let mut m = Modifiers::empty();
+    if mods.get("shift").and_then(|v| v.as_bool()).unwrap_or(false) {
+        m |= Modifiers::SHIFT;
+    }
+    if mods.get("ctrl").and_then(|v| v.as_bool()).unwrap_or(false) {
+        m |= Modifiers::CTRL;
+    }
+    if mods.get("alt").and_then(|v| v.as_bool()).unwrap_or(false) {
+        m |= Modifiers::ALT;
+    }
+    if mods.get("logo").and_then(|v| v.as_bool()).unwrap_or(false) {
+        m |= Modifiers::LOGO;
+    }
+    m
+}
+
+/// Build a KeyPressed iced event.
+pub(crate) fn make_key_pressed(key: Key, modifiers: Modifiers, text: Option<SmolStr>) -> Event {
+    Event::Keyboard(keyboard::Event::KeyPressed {
+        key: key.clone(),
+        modified_key: key,
+        physical_key: keyboard::key::Physical::Unidentified(
+            keyboard::key::NativeCode::Unidentified,
+        ),
+        location: keyboard::Location::Standard,
+        modifiers,
+        text,
+        repeat: false,
+    })
+}
+
+/// Build a KeyReleased iced event.
+pub(crate) fn make_key_released(key: Key, modifiers: Modifiers) -> Event {
+    Event::Keyboard(keyboard::Event::KeyReleased {
+        key: key.clone(),
+        modified_key: key,
+        physical_key: keyboard::key::Physical::Unidentified(
+            keyboard::key::NativeCode::Unidentified,
+        ),
+        location: keyboard::Location::Standard,
+        modifiers,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Interaction -> iced events
+// ---------------------------------------------------------------------------
+
+/// Convert a scripting protocol interaction into a sequence of iced events.
+///
+/// Returns an empty vec for action types that don't map to iced events
+/// (synthetic-only actions like paste, sort, canvas_*, pane_focus_cycle).
+pub(crate) fn interaction_to_iced_events(
+    action: &str,
+    _widget_id: Option<&str>,
+    payload: &Value,
+    cursor: mouse::Cursor,
+) -> Vec<Event> {
+    match action {
+        "click" | "toggle" | "select" => {
+            // Click at the current cursor position.
+            let pos = match cursor {
+                mouse::Cursor::Available(p) | mouse::Cursor::Levitating(p) => p,
+                mouse::Cursor::Unavailable => Point::new(0.0, 0.0),
+            };
+            vec![
+                Event::Mouse(mouse::Event::CursorMoved { position: pos }),
+                Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            ]
+        }
+        "type_text" => {
+            let text = payload.get("text").and_then(|v| v.as_str()).unwrap_or("");
+            text.chars()
+                .flat_map(|c| {
+                    let s = SmolStr::new(c.to_string());
+                    let key = Key::Character(s.clone());
+                    [
+                        make_key_pressed(key.clone(), Modifiers::empty(), Some(s)),
+                        make_key_released(key, Modifiers::empty()),
+                    ]
+                })
+                .collect()
+        }
+        "type_key" => {
+            let payload_map = payload.as_object();
+            let (key_str, mods_json) = parse_key_and_modifiers(payload_map);
+            let key = parse_iced_key(&key_str);
+            let modifiers = parse_iced_modifiers(&mods_json);
+            let text = match &key {
+                Key::Character(c) if modifiers.is_empty() => Some(c.clone()),
+                _ => None,
+            };
+            vec![
+                make_key_pressed(key.clone(), modifiers, text),
+                make_key_released(key, modifiers),
+            ]
+        }
+        "press" => {
+            let payload_map = payload.as_object();
+            let (key_str, mods_json) = parse_key_and_modifiers(payload_map);
+            let key = parse_iced_key(&key_str);
+            let modifiers = parse_iced_modifiers(&mods_json);
+            let text = match &key {
+                Key::Character(c) if modifiers.is_empty() => Some(c.clone()),
+                _ => None,
+            };
+            vec![make_key_pressed(key, modifiers, text)]
+        }
+        "release" => {
+            let payload_map = payload.as_object();
+            let (key_str, mods_json) = parse_key_and_modifiers(payload_map);
+            let key = parse_iced_key(&key_str);
+            let modifiers = parse_iced_modifiers(&mods_json);
+            vec![make_key_released(key, modifiers)]
+        }
+        "submit" => {
+            let key = Key::Named(keyboard::key::Named::Enter);
+            vec![
+                make_key_pressed(key.clone(), Modifiers::empty(), None),
+                make_key_released(key, Modifiers::empty()),
+            ]
+        }
+        "scroll" => {
+            let delta_x = payload
+                .get("delta_x")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0) as f32;
+            let delta_y = payload
+                .get("delta_y")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0) as f32;
+            vec![Event::Mouse(mouse::Event::WheelScrolled {
+                delta: mouse::ScrollDelta::Lines {
+                    x: delta_x,
+                    y: delta_y,
+                },
+            })]
+        }
+        "move_to" => {
+            let x = payload.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+            let y = payload.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+            vec![Event::Mouse(mouse::Event::CursorMoved {
+                position: Point::new(x, y),
+            })]
+        }
+        // Synthetic-only actions: no iced event injection needed.
+        "paste" | "sort" | "canvas_press" | "canvas_release" | "canvas_move"
+        | "pane_focus_cycle" | "slide" => vec![],
+        _ => vec![],
     }
 }
 
@@ -1232,5 +1446,192 @@ mod tests {
             json!({"by": "focused"}),
             json!({}),
         );
+    }
+
+    // -- parse_iced_key / parse_iced_modifiers / interaction_to_iced_events --
+
+    #[test]
+    fn parse_iced_key_named_enter() {
+        assert_eq!(
+            parse_iced_key("Enter"),
+            Key::Named(keyboard::key::Named::Enter)
+        );
+        assert_eq!(
+            parse_iced_key("enter"),
+            Key::Named(keyboard::key::Named::Enter)
+        );
+    }
+
+    #[test]
+    fn parse_iced_key_named_tab() {
+        assert_eq!(parse_iced_key("Tab"), Key::Named(keyboard::key::Named::Tab));
+    }
+
+    #[test]
+    fn parse_iced_key_named_arrows() {
+        assert_eq!(
+            parse_iced_key("ArrowUp"),
+            Key::Named(keyboard::key::Named::ArrowUp)
+        );
+        assert_eq!(
+            parse_iced_key("Up"),
+            Key::Named(keyboard::key::Named::ArrowUp)
+        );
+        assert_eq!(
+            parse_iced_key("ArrowDown"),
+            Key::Named(keyboard::key::Named::ArrowDown)
+        );
+    }
+
+    #[test]
+    fn parse_iced_key_single_char() {
+        assert_eq!(parse_iced_key("a"), Key::Character(SmolStr::new("a")));
+        assert_eq!(parse_iced_key("Z"), Key::Character(SmolStr::new("Z")));
+    }
+
+    #[test]
+    fn parse_iced_key_function_keys() {
+        assert_eq!(parse_iced_key("F1"), Key::Named(keyboard::key::Named::F1));
+        assert_eq!(parse_iced_key("F12"), Key::Named(keyboard::key::Named::F12));
+    }
+
+    #[test]
+    fn parse_iced_modifiers_from_json() {
+        let mods = json!({"shift": true, "ctrl": true, "alt": false, "logo": false});
+        let result = parse_iced_modifiers(&mods);
+        assert!(result.shift());
+        assert!(result.control());
+        assert!(!result.alt());
+        assert!(!result.logo());
+    }
+
+    #[test]
+    fn parse_iced_modifiers_empty() {
+        let mods = json!({});
+        let result = parse_iced_modifiers(&mods);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn interaction_to_iced_events_click() {
+        let events = interaction_to_iced_events(
+            "click",
+            Some("btn1"),
+            &json!({}),
+            mouse::Cursor::Available(Point::new(100.0, 50.0)),
+        );
+        assert_eq!(events.len(), 3); // CursorMoved + ButtonPressed + ButtonReleased
+    }
+
+    #[test]
+    fn interaction_to_iced_events_type_text() {
+        let events = interaction_to_iced_events(
+            "type_text",
+            Some("inp1"),
+            &json!({"text": "hi"}),
+            mouse::Cursor::Unavailable,
+        );
+        // 2 chars * 2 events each (press + release)
+        assert_eq!(events.len(), 4);
+    }
+
+    #[test]
+    fn interaction_to_iced_events_scroll() {
+        let events = interaction_to_iced_events(
+            "scroll",
+            None,
+            &json!({"delta_x": 0.0, "delta_y": -10.0}),
+            mouse::Cursor::Unavailable,
+        );
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
+                assert_eq!(*delta, mouse::ScrollDelta::Lines { x: 0.0, y: -10.0 });
+            }
+            _ => panic!("expected WheelScrolled"),
+        }
+    }
+
+    #[test]
+    fn interaction_to_iced_events_move_to() {
+        let events = interaction_to_iced_events(
+            "move_to",
+            None,
+            &json!({"x": 42.0, "y": 84.0}),
+            mouse::Cursor::Unavailable,
+        );
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            Event::Mouse(mouse::Event::CursorMoved { position }) => {
+                assert_eq!(*position, Point::new(42.0, 84.0));
+            }
+            _ => panic!("expected CursorMoved"),
+        }
+    }
+
+    #[test]
+    fn interaction_to_iced_events_synthetic_only() {
+        // These actions should produce no iced events.
+        for action in &[
+            "paste",
+            "sort",
+            "canvas_press",
+            "canvas_release",
+            "canvas_move",
+            "pane_focus_cycle",
+            "slide",
+        ] {
+            let events = interaction_to_iced_events(
+                action,
+                Some("w1"),
+                &json!({}),
+                mouse::Cursor::Unavailable,
+            );
+            assert!(
+                events.is_empty(),
+                "action '{action}' should produce no iced events"
+            );
+        }
+    }
+
+    #[test]
+    fn interaction_to_iced_events_submit() {
+        let events = interaction_to_iced_events(
+            "submit",
+            Some("inp1"),
+            &json!({}),
+            mouse::Cursor::Unavailable,
+        );
+        assert_eq!(events.len(), 2); // KeyPressed(Enter) + KeyReleased(Enter)
+    }
+
+    #[test]
+    fn interaction_to_iced_events_type_key() {
+        let events = interaction_to_iced_events(
+            "type_key",
+            None,
+            &json!({"key": "ctrl+s"}),
+            mouse::Cursor::Unavailable,
+        );
+        assert_eq!(events.len(), 2); // KeyPressed + KeyReleased
+    }
+
+    #[test]
+    fn interaction_to_iced_events_press_release() {
+        let press = interaction_to_iced_events(
+            "press",
+            None,
+            &json!({"key": "a"}),
+            mouse::Cursor::Unavailable,
+        );
+        assert_eq!(press.len(), 1);
+
+        let release = interaction_to_iced_events(
+            "release",
+            None,
+            &json!({"key": "a"}),
+            mouse::Cursor::Unavailable,
+        );
+        assert_eq!(release.len(), 1);
     }
 }

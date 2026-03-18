@@ -222,9 +222,9 @@ This workspace contains two crates:
 
 All capabilities are compiled in by default -- no feature flags to
 manage. The binary includes all 30+ widget types, accessibility,
-file dialogs, clipboard, notifications, and both test modes.
+file dialogs, clipboard, notifications, and both non-GUI modes.
 
-Headless mode (`--headless`) and test mode (`--test`) are runtime
+Headless mode (`--headless`) and mock mode (`--mock`) are runtime
 flags that don't require a special build.
 
 ## Development

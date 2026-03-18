@@ -494,7 +494,7 @@ impl App {
                         );
 
                         // Inject real iced events (renderer-managed state).
-                        let iced_events = crate::headless::interaction_to_iced_events(
+                        let iced_events = crate::scripting::interaction_to_iced_events(
                             &action,
                             None,
                             &payload,
@@ -1612,11 +1612,19 @@ pub(crate) fn run(builder: julep_core::app::JulepAppBuilder) -> iced::Result {
 
     {
         if args.contains(&"--mock".to_string()) {
-            crate::headless::run(forced_codec, builder.build_dispatcher(), false);
+            crate::headless::run(
+                forced_codec,
+                builder.build_dispatcher(),
+                crate::headless::Mode::Mock,
+            );
             return Ok(());
         }
         if args.contains(&"--headless".to_string()) {
-            crate::headless::run(forced_codec, builder.build_dispatcher(), true);
+            crate::headless::run(
+                forced_codec,
+                builder.build_dispatcher(),
+                crate::headless::Mode::Headless,
+            );
             return Ok(());
         }
     }
