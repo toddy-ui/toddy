@@ -11,7 +11,6 @@
 //! use julep_core::prelude::*;
 //!
 //! let test = TestEnv::default();
-//! let node = node_with_props("s-1", "sparkline", json!({"color": "#ff0000"}));
 //! let env = test.env();
 //! let element = my_extension.render(&node, &env);
 //! ```
@@ -19,7 +18,7 @@
 use iced::Theme;
 use serde_json::{Value, json};
 
-use crate::extensions::{ExtensionCaches, ExtensionDispatcher, RenderContext, WidgetEnv};
+use crate::extensions::{ExtensionCaches, ExtensionDispatcher, RenderCtx, WidgetEnv};
 use crate::image_registry::ImageRegistry;
 use crate::protocol::TreeNode;
 use crate::widgets::WidgetCaches;
@@ -90,6 +89,8 @@ pub struct TestEnv {
     pub images: ImageRegistry,
     pub theme: Theme,
     pub dispatcher: ExtensionDispatcher,
+    pub default_text_size: Option<f32>,
+    pub default_font: Option<iced::Font>,
 }
 
 impl Default for TestEnv {
@@ -100,25 +101,38 @@ impl Default for TestEnv {
             images: ImageRegistry::new(),
             theme: Theme::Dark,
             dispatcher: ExtensionDispatcher::new(vec![]),
+            default_text_size: None,
+            default_font: None,
         }
     }
 }
 
 impl TestEnv {
-    /// Borrow a [`WidgetEnv`] from the owned test state.
-    pub fn env(&self) -> WidgetEnv<'_> {
-        WidgetEnv {
-            caches: &self.ext_caches,
+    /// Build a [`RenderCtx`] from the owned test state.
+    pub fn render_ctx(&self) -> RenderCtx<'_> {
+        RenderCtx {
+            caches: &self.widget_caches,
             images: &self.images,
             theme: &self.theme,
-            render_ctx: RenderContext {
-                caches: &self.widget_caches,
-                images: &self.images,
-                theme: &self.theme,
-                extensions: &self.dispatcher,
-            },
-            default_text_size: self.widget_caches.default_text_size,
-            default_font: self.widget_caches.default_font,
+            extensions: &self.dispatcher,
+            default_text_size: self.default_text_size,
+            default_font: self.default_font,
+        }
+    }
+
+    /// Borrow a [`WidgetEnv`] using an externally-held [`RenderCtx`].
+    ///
+    /// Usage:
+    /// ```ignore
+    /// let test = TestEnv::default();
+    /// let ctx = test.render_ctx();
+    /// let env = test.env(&ctx);
+    /// let element = my_extension.render(&node, &env);
+    /// ```
+    pub fn env<'a>(&'a self, ctx: &RenderCtx<'a>) -> WidgetEnv<'a> {
+        WidgetEnv {
+            caches: &self.ext_caches,
+            ctx: *ctx,
         }
     }
 }
@@ -173,34 +187,33 @@ mod tests {
     #[test]
     fn default_env_has_no_text_defaults() {
         let test = TestEnv::default();
-        let env = test.env();
-        assert!(env.default_text_size.is_none());
-        assert!(env.default_font.is_none());
+        let ctx = test.render_ctx();
+        let env = test.env(&ctx);
+        assert!(env.default_text_size().is_none());
+        assert!(env.default_font().is_none());
     }
 
     #[test]
     fn default_env_has_empty_state() {
         let test = TestEnv::default();
-        let env = test.env();
+        let ctx = test.render_ctx();
+        let env = test.env(&ctx);
         assert!(!env.caches.contains("test", "anything"));
-        assert!(env.render_ctx.extensions.is_empty());
+        assert!(ctx.extensions.is_empty());
     }
 
     #[test]
     fn env_inherits_text_defaults() {
         let test = TestEnv {
-            widget_caches: {
-                let mut wc = WidgetCaches::new();
-                wc.default_text_size = Some(18.0);
-                wc.default_font = Some(iced::Font::MONOSPACE);
-                wc
-            },
+            default_text_size: Some(18.0),
+            default_font: Some(iced::Font::MONOSPACE),
             ..TestEnv::default()
         };
 
-        let env = test.env();
-        assert_eq!(env.default_text_size, Some(18.0));
-        assert_eq!(env.default_font, Some(iced::Font::MONOSPACE));
+        let ctx = test.render_ctx();
+        let env = test.env(&ctx);
+        assert_eq!(env.default_text_size(), Some(18.0));
+        assert_eq!(env.default_font(), Some(iced::Font::MONOSPACE));
     }
 
     #[test]
@@ -209,7 +222,8 @@ mod tests {
             theme: Theme::Light,
             ..TestEnv::default()
         };
-        let _env = test.env();
+        let ctx = test.render_ctx();
+        let _env = test.env(&ctx);
     }
 
     // -- GenerationCounter in ExtensionCaches ---------------------------------

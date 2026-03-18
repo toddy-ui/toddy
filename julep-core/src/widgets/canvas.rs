@@ -4,9 +4,8 @@ use iced::widget::canvas;
 use iced::{Color, Element, Length, Pixels, Point, Radians, Size, Vector, alignment, mouse};
 use serde_json::Value;
 
-use super::WidgetCaches;
 use super::helpers::*;
-use crate::extensions::ExtensionDispatcher;
+use crate::extensions::RenderCtx;
 use crate::message::Message;
 use crate::protocol::TreeNode;
 
@@ -791,13 +790,7 @@ fn serialize_mouse_button_for_canvas(button: &mouse::Button) -> String {
     }
 }
 
-pub(crate) fn render_canvas<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-    images: &'a crate::image_registry::ImageRegistry,
-    _theme: &'a iced::Theme,
-    _dispatcher: &'a ExtensionDispatcher,
-) -> Element<'a, Message> {
+pub(crate) fn render_canvas<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     let props = node.props.as_object();
     let width = prop_length(props, "width", Length::Fill);
     let height = prop_length(props, "height", Length::Fixed(200.0));
@@ -806,7 +799,7 @@ pub(crate) fn render_canvas<'a>(
     // serialize-then-deserialize round trip that canvas_layer_map would do.
     let layers: Vec<(String, Vec<Value>)> = canvas_layers_from_props(props);
 
-    let node_caches = caches.canvas_caches.get(&node.id);
+    let node_caches = ctx.caches.canvas_caches.get(&node.id);
 
     let background = props
         .and_then(|p| p.get("background"))
@@ -828,7 +821,7 @@ pub(crate) fn render_canvas<'a>(
         on_release: on_release || interactive,
         on_move: on_move || interactive,
         on_scroll: on_scroll || interactive,
-        images,
+        images: ctx.images,
     })
     .width(width)
     .height(height)

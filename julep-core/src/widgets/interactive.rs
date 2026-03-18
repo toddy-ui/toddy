@@ -3,9 +3,8 @@ use std::time::Duration;
 use iced::widget::{Space, button, container, mouse_area, sensor, text, tooltip};
 use iced::{Element, Fill, Length, mouse, widget};
 
-use super::caches::WidgetCaches;
 use super::helpers::*;
-use crate::extensions::ExtensionDispatcher;
+use crate::extensions::RenderCtx;
 use crate::message::Message;
 use crate::protocol::TreeNode;
 
@@ -13,13 +12,7 @@ use crate::protocol::TreeNode;
 // Button
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_button<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-    images: &'a crate::image_registry::ImageRegistry,
-    theme: &'a iced::Theme,
-    dispatcher: &'a ExtensionDispatcher,
-) -> Element<'a, Message> {
+pub(crate) fn render_button<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     let props = node.props.as_object();
     let id = node.id.clone();
 
@@ -27,7 +20,7 @@ pub(crate) fn render_button<'a>(
     let child: Element<'a, Message> = if !node.children.is_empty() {
         node.children
             .first()
-            .map(|c| super::render(c, caches, images, theme, dispatcher))
+            .map(|c| ctx.render_child(c))
             .unwrap_or_else(|| Space::new().into())
     } else {
         let label = prop_str(props, "label")
@@ -128,16 +121,13 @@ pub(crate) fn render_button<'a>(
 
 pub(crate) fn render_mouse_area<'a>(
     node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-    images: &'a crate::image_registry::ImageRegistry,
-    theme: &'a iced::Theme,
-    dispatcher: &'a ExtensionDispatcher,
+    ctx: RenderCtx<'a>,
 ) -> Element<'a, Message> {
     let props = node.props.as_object();
     let child: Element<'a, Message> = node
         .children
         .first()
-        .map(|c| super::render(c, caches, images, theme, dispatcher))
+        .map(|c| ctx.render_child(c))
         .unwrap_or_else(|| Space::new().into());
 
     let id = node.id.clone();
@@ -204,17 +194,11 @@ pub(crate) fn render_mouse_area<'a>(
 // Sensor
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_sensor<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-    images: &'a crate::image_registry::ImageRegistry,
-    theme: &'a iced::Theme,
-    dispatcher: &'a ExtensionDispatcher,
-) -> Element<'a, Message> {
+pub(crate) fn render_sensor<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     let child: Element<'a, Message> = node
         .children
         .first()
-        .map(|c| super::render(c, caches, images, theme, dispatcher))
+        .map(|c| ctx.render_child(c))
         .unwrap_or_else(|| Space::new().into());
 
     // Sensor needs a key. Use the node id.
@@ -247,13 +231,7 @@ pub(crate) fn render_sensor<'a>(
 // Tooltip
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_tooltip<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-    images: &'a crate::image_registry::ImageRegistry,
-    theme: &'a iced::Theme,
-    dispatcher: &'a ExtensionDispatcher,
-) -> Element<'a, Message> {
+pub(crate) fn render_tooltip<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     let props = node.props.as_object();
     let tip = prop_str(props, "tip").unwrap_or_default();
     let gap = prop_f32(props, "gap");
@@ -270,7 +248,7 @@ pub(crate) fn render_tooltip<'a>(
     let child: Element<'a, Message> = node
         .children
         .first()
-        .map(|c| super::render(c, caches, images, theme, dispatcher))
+        .map(|c| ctx.render_child(c))
         .unwrap_or_else(|| Space::new().into());
 
     let mut tt = tooltip(child, text(tip), position);
@@ -325,22 +303,20 @@ pub(crate) fn render_tooltip<'a>(
 // Themer (applies a sub-theme to child content)
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_themer<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-    images: &'a crate::image_registry::ImageRegistry,
-    theme: &'a iced::Theme,
-    dispatcher: &'a ExtensionDispatcher,
-) -> Element<'a, Message> {
-    // The resolved theme lives in caches.themer_themes (populated by
+pub(crate) fn render_themer<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
+    // The resolved theme lives in ctx.caches.themer_themes (populated by
     // ensure_caches) so we can borrow it with lifetime 'a for child rendering.
-    let cached_theme = caches.themer_themes.get(&node.id);
-    let child_theme = cached_theme.unwrap_or(theme);
+    let cached_theme = ctx.caches.themer_themes.get(&node.id);
+    let child_theme = cached_theme.unwrap_or(ctx.theme);
+
+    // Build a child ctx with the resolved sub-theme so children render
+    // against the overridden theme.
+    let child_ctx = ctx.with_theme(child_theme);
 
     let child: Element<'a, Message> = node
         .children
         .first()
-        .map(|c| super::render(c, caches, images, child_theme, dispatcher))
+        .map(|c| child_ctx.render_child(c))
         .unwrap_or_else(|| Space::new().into());
 
     // Clone the cached theme into an owned Option for the Themer wrapper.
@@ -352,13 +328,7 @@ pub(crate) fn render_themer<'a>(
 // Window (top-level container)
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_window<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-    images: &'a crate::image_registry::ImageRegistry,
-    theme: &'a iced::Theme,
-    dispatcher: &'a ExtensionDispatcher,
-) -> Element<'a, Message> {
+pub(crate) fn render_window<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     let props = node.props.as_object();
     let padding = parse_padding_value(props);
     let width = prop_length(props, "width", Fill);
@@ -367,7 +337,7 @@ pub(crate) fn render_window<'a>(
     let child: Element<'a, Message> = node
         .children
         .first()
-        .map(|c| super::render(c, caches, images, theme, dispatcher))
+        .map(|c| ctx.render_child(c))
         .unwrap_or_else(|| Space::new().into());
 
     container(child)
@@ -381,13 +351,7 @@ pub(crate) fn render_window<'a>(
 // Overlay
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_overlay<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-    images: &'a crate::image_registry::ImageRegistry,
-    theme: &'a iced::Theme,
-    dispatcher: &'a ExtensionDispatcher,
-) -> Element<'a, Message> {
+pub(crate) fn render_overlay<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     use crate::overlay_widget;
 
     let props = node.props.as_object();
@@ -401,8 +365,8 @@ pub(crate) fn render_overlay<'a>(
         return text(format!("overlay requires 2 children (id={})", node.id)).into();
     }
 
-    let anchor = super::render(&children[0], caches, images, theme, dispatcher);
-    let content = super::render(&children[1], caches, images, theme, dispatcher);
+    let anchor = ctx.render_child(&children[0]);
+    let content = ctx.render_child(&children[1]);
 
     let pos = match position.as_str() {
         "above" => overlay_widget::Position::Above,

@@ -261,9 +261,6 @@ impl Core {
                         None => Font::DEFAULT,
                     }
                 });
-                self.caches.default_text_size = self.default_text_size;
-                self.caches.default_font = self.default_font;
-
                 if let Some(ext_config) = settings.get("extension_config") {
                     effects.push(CoreEffect::ExtensionConfig(ext_config.clone()));
                 }

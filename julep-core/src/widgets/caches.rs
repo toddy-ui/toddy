@@ -14,7 +14,6 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 
-use iced::Font;
 use iced::widget::canvas as iced_canvas;
 use iced::widget::{combo_box, markdown, pane_grid, text_editor};
 use serde_json::Value;
@@ -59,11 +58,6 @@ pub struct WidgetCaches {
     /// Resolved themes for Themer widget nodes. Populated in ensure_caches()
     /// so render_themer() can borrow them with the correct lifetime.
     pub(crate) themer_themes: HashMap<String, iced::Theme>,
-    /// Global default text size from Settings. Survives [`clear_builtin`]
-    /// because it's a session-level setting, not a per-tree cache entry.
-    pub(crate) default_text_size: Option<f32>,
-    /// Global default font from Settings. Same lifetime as `default_text_size`.
-    pub(crate) default_font: Option<Font>,
     /// Extension-owned caches. Public so extension authors can access
     /// their own cached state during render/prepare/cleanup.
     pub extension: crate::extensions::ExtensionCaches,
@@ -87,8 +81,6 @@ impl WidgetCaches {
             canvas_caches: HashMap::new(),
             qr_code_caches: HashMap::new(),
             themer_themes: HashMap::new(),
-            default_text_size: None,
-            default_font: None,
             extension: crate::extensions::ExtensionCaches::new(),
         }
     }
@@ -117,8 +109,7 @@ impl WidgetCaches {
         self.pane_grid_states.get(id)
     }
 
-    /// Clear per-node widget caches without touching extension caches or
-    /// session-level settings (`default_text_size`, `default_font`).
+    /// Clear per-node widget caches without touching extension caches.
     ///
     /// Used by the Snapshot handler so that extension cleanup callbacks
     /// (via `ExtensionDispatcher::prepare_all`) can run before the
@@ -501,20 +492,14 @@ mod tests {
         assert!(c.combo_states.is_empty());
         assert!(c.combo_options.is_empty());
         assert!(c.pane_grid_states.is_empty());
-        assert!(c.default_text_size.is_none());
-        assert!(c.default_font.is_none());
     }
 
     #[test]
-    fn widget_caches_clear_empties_maps_but_preserves_defaults() {
+    fn widget_caches_clear_empties_maps() {
         let mut c = WidgetCaches::new();
-        c.default_text_size = Some(14.0);
-        c.default_font = Some(Font::MONOSPACE);
         c.combo_options.insert("x".into(), vec!["a".into()]);
         c.clear();
         assert!(c.combo_options.is_empty());
-        assert_eq!(c.default_text_size, Some(14.0));
-        assert_eq!(c.default_font, Some(Font::MONOSPACE));
     }
 
     // -- clear_builtin vs clear --

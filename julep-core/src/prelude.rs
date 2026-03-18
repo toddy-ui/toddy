@@ -14,7 +14,7 @@
 
 // -- Extension trait and lifecycle types --
 pub use crate::extensions::{
-    EventResult, ExtensionCaches, GenerationCounter, WidgetEnv, WidgetExtension,
+    EventResult, ExtensionCaches, GenerationCounter, RenderCtx, WidgetEnv, WidgetExtension,
 };
 
 // -- Wire protocol types --

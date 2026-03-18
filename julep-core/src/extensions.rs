@@ -363,26 +363,55 @@ impl Default for ExtensionCaches {
 /// - `default_font` -- global default font from Settings, if set.
 pub struct WidgetEnv<'a> {
     pub caches: &'a ExtensionCaches,
-    pub images: &'a ImageRegistry,
-    pub theme: &'a Theme,
-    pub render_ctx: RenderContext<'a>,
-    pub default_text_size: Option<f32>,
-    pub default_font: Option<iced::Font>,
+    pub ctx: RenderCtx<'a>,
+}
+
+impl<'a> WidgetEnv<'a> {
+    pub fn images(&self) -> &'a ImageRegistry {
+        self.ctx.images
+    }
+    pub fn theme(&self) -> &'a Theme {
+        self.ctx.theme
+    }
+    pub fn default_text_size(&self) -> Option<f32> {
+        self.ctx.default_text_size
+    }
+    pub fn default_font(&self) -> Option<iced::Font> {
+        self.ctx.default_font
+    }
+    pub fn render_child(&self, node: &'a TreeNode) -> Element<'a, Message> {
+        self.ctx.render_child(node)
+    }
 }
 
 /// Renders child nodes through the main dispatch. Copy-able (all shared refs).
 #[derive(Clone, Copy)]
-pub struct RenderContext<'a> {
+pub struct RenderCtx<'a> {
     pub caches: &'a WidgetCaches,
     pub images: &'a ImageRegistry,
     pub theme: &'a Theme,
     pub extensions: &'a ExtensionDispatcher,
+    pub default_text_size: Option<f32>,
+    pub default_font: Option<iced::Font>,
 }
 
-impl<'a> RenderContext<'a> {
+/// Type alias for backwards compatibility with extension crates.
+pub type RenderContext<'a> = RenderCtx<'a>;
+
+impl<'a> RenderCtx<'a> {
     /// Render a child node through the main dispatch.
     pub fn render_child(&self, node: &'a TreeNode) -> Element<'a, Message> {
-        crate::widgets::render(node, self.caches, self.images, self.theme, self.extensions)
+        crate::widgets::render(node, *self)
+    }
+
+    /// Create a new RenderCtx with a different theme, preserving all other fields.
+    pub fn with_theme(&self, theme: &'a Theme) -> Self {
+        RenderCtx { theme, ..*self }
+    }
+
+    /// Render all children of a node through the main dispatch.
+    pub fn render_children(&self, node: &'a TreeNode) -> Vec<Element<'a, Message>> {
+        node.children.iter().map(|c| self.render_child(c)).collect()
     }
 }
 
@@ -1561,19 +1590,17 @@ mod tests {
         let node = make_node("pr1", "panicky_render");
         {
             let widget_caches = crate::widgets::WidgetCaches::new();
-            let render_ctx = crate::extensions::RenderContext {
+            let ctx = RenderCtx {
                 caches: &widget_caches,
                 images: &images,
                 theme: &theme,
                 extensions: &dispatcher,
+                default_text_size: None,
+                default_font: None,
             };
             let env = WidgetEnv {
                 caches: &caches,
-                images: &images,
-                theme: &theme,
-                render_ctx,
-                default_text_size: None,
-                default_font: None,
+                ctx,
             };
             let result = dispatcher.render(&node, &env);
             assert!(
@@ -1595,19 +1622,17 @@ mod tests {
         //    extension (which panics) rather than returning the placeholder.
         //    We use catch_unwind to contain the panic.
         let widget_caches2 = crate::widgets::WidgetCaches::new();
-        let render_ctx2 = crate::extensions::RenderContext {
+        let ctx2 = RenderCtx {
             caches: &widget_caches2,
             images: &images,
             theme: &theme,
             extensions: &dispatcher,
+            default_text_size: None,
+            default_font: None,
         };
         let env2 = WidgetEnv {
             caches: &caches,
-            images: &images,
-            theme: &theme,
-            render_ctx: render_ctx2,
-            default_text_size: None,
-            default_font: None,
+            ctx: ctx2,
         };
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             dispatcher.render(&node, &env2)

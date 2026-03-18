@@ -3,10 +3,10 @@ use std::cell::Cell;
 use iced::widget::{Space, container, text};
 use iced::{Color, Element};
 
-use super::caches::{MAX_TREE_DEPTH, WidgetCaches};
+use super::caches::MAX_TREE_DEPTH;
 use super::helpers::*;
 use super::{canvas, display, input, interactive, layout, table, validate};
-use crate::extensions::ExtensionDispatcher;
+use crate::extensions::RenderCtx;
 use crate::message::Message;
 use crate::protocol::TreeNode;
 
@@ -21,13 +21,7 @@ use crate::protocol::TreeNode;
 /// Cache, etc.) must be pre-populated by [`super::ensure_caches`] before calling
 /// this function. `render` works exclusively with shared (`&`) references
 /// to caches, so it can run inside iced's `view()` which only has `&self`.
-pub fn render<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-    images: &'a crate::image_registry::ImageRegistry,
-    theme: &'a iced::Theme,
-    dispatcher: &'a ExtensionDispatcher,
-) -> Element<'a, Message> {
+pub fn render<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     // Track recursion depth via thread-local counter. Each call increments
     // on entry; the DepthGuard decrements on drop (including early returns).
     thread_local! {
@@ -63,65 +57,55 @@ pub fn render<'a>(
 
     let element = match node.type_name.as_str() {
         // Layout widgets
-        "column" => layout::render_column(node, caches, images, theme, dispatcher),
-        "row" => layout::render_row(node, caches, images, theme, dispatcher),
-        "container" => layout::render_container(node, caches, images, theme, dispatcher),
-        "stack" => layout::render_stack(node, caches, images, theme, dispatcher),
-        "grid" => layout::render_grid(node, caches, images, theme, dispatcher),
-        "pin" => layout::render_pin(node, caches, images, theme, dispatcher),
-        "keyed_column" => layout::render_keyed_column(node, caches, images, theme, dispatcher),
-        "float" => layout::render_float(node, caches, images, theme, dispatcher),
-        "responsive" => layout::render_responsive(node, caches, images, theme, dispatcher),
-        "scrollable" => layout::render_scrollable(node, caches, images, theme, dispatcher),
-        "pane_grid" => layout::render_pane_grid(node, caches, images, theme, dispatcher),
+        "column" => layout::render_column(node, ctx),
+        "row" => layout::render_row(node, ctx),
+        "container" => layout::render_container(node, ctx),
+        "stack" => layout::render_stack(node, ctx),
+        "grid" => layout::render_grid(node, ctx),
+        "pin" => layout::render_pin(node, ctx),
+        "keyed_column" => layout::render_keyed_column(node, ctx),
+        "float" => layout::render_float(node, ctx),
+        "responsive" => layout::render_responsive(node, ctx),
+        "scrollable" => layout::render_scrollable(node, ctx),
+        "pane_grid" => layout::render_pane_grid(node, ctx),
         // Display widgets
-        "text" => display::render_text(node, caches),
-        "rich_text" | "rich" => display::render_rich_text(node, caches),
+        "text" => display::render_text(node, ctx),
+        "rich_text" | "rich" => display::render_rich_text(node, ctx),
         "space" => display::render_space(node),
         "rule" => display::render_rule(node),
         "progress_bar" => display::render_progress_bar(node),
-        "image" => display::render_image(node, images),
+        "image" => display::render_image(node, ctx),
         "svg" => display::render_svg(node),
-        "markdown" => display::render_markdown(node, caches, theme),
-        "qr_code" => display::render_qr_code(node, caches),
+        "markdown" => display::render_markdown(node, ctx),
+        "qr_code" => display::render_qr_code(node, ctx),
         // Input widgets
-        "text_input" => input::render_text_input(node, caches),
-        "text_editor" => input::render_text_editor(node, caches),
-        "checkbox" => input::render_checkbox(node, caches),
-        "toggler" => input::render_toggler(node, caches),
-        "radio" => input::render_radio(node, caches),
+        "text_input" => input::render_text_input(node, ctx),
+        "text_editor" => input::render_text_editor(node, ctx),
+        "checkbox" => input::render_checkbox(node, ctx),
+        "toggler" => input::render_toggler(node, ctx),
+        "radio" => input::render_radio(node, ctx),
         "slider" => input::render_slider(node),
         "vertical_slider" => input::render_vertical_slider(node),
-        "pick_list" => input::render_pick_list(node, caches),
-        "combo_box" => input::render_combo_box(node, caches),
+        "pick_list" => input::render_pick_list(node, ctx),
+        "combo_box" => input::render_combo_box(node, ctx),
         // Interactive widgets
-        "button" => interactive::render_button(node, caches, images, theme, dispatcher),
-        "mouse_area" => interactive::render_mouse_area(node, caches, images, theme, dispatcher),
-        "sensor" => interactive::render_sensor(node, caches, images, theme, dispatcher),
-        "tooltip" => interactive::render_tooltip(node, caches, images, theme, dispatcher),
-        "themer" => interactive::render_themer(node, caches, images, theme, dispatcher),
-        "window" => interactive::render_window(node, caches, images, theme, dispatcher),
-        "overlay" => interactive::render_overlay(node, caches, images, theme, dispatcher),
+        "button" => interactive::render_button(node, ctx),
+        "mouse_area" => interactive::render_mouse_area(node, ctx),
+        "sensor" => interactive::render_sensor(node, ctx),
+        "tooltip" => interactive::render_tooltip(node, ctx),
+        "themer" => interactive::render_themer(node, ctx),
+        "window" => interactive::render_window(node, ctx),
+        "overlay" => interactive::render_overlay(node, ctx),
         // Canvas
-        "canvas" => canvas::render_canvas(node, caches, images, theme, dispatcher),
+        "canvas" => canvas::render_canvas(node, ctx),
         // Table
         "table" => table::render_table(node),
         // Extension dispatch
         unknown => {
-            if dispatcher.handles_type(unknown) {
-                let render_ctx = crate::extensions::RenderContext {
-                    caches,
-                    images,
-                    theme,
-                    extensions: dispatcher,
-                };
+            if ctx.extensions.handles_type(unknown) {
                 let env = crate::extensions::WidgetEnv {
-                    caches: &caches.extension,
-                    images,
-                    theme,
-                    render_ctx,
-                    default_text_size: caches.default_text_size,
-                    default_font: caches.default_font,
+                    caches: &ctx.caches.extension,
+                    ctx,
                 };
                 // catch_unwind at the render boundary: extension panics produce
                 // a red placeholder instead of crashing the renderer.
@@ -130,12 +114,12 @@ pub fn render<'a>(
                 // extension is poisoned on the next prepare_all cycle.
                 if crate::extensions::catch_unwind_enabled() {
                     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        dispatcher.render(node, &env)
+                        ctx.extensions.render(node, &env)
                     })) {
                         Ok(Some(element)) => element,
                         Ok(None) => container(Space::new()).into(),
                         Err(_) => {
-                            let at_threshold = dispatcher.record_render_panic(unknown);
+                            let at_threshold = ctx.extensions.record_render_panic(unknown);
                             if at_threshold {
                                 log::error!(
                                     "[id={}] extension for type `{unknown}` hit render panic \
@@ -154,7 +138,7 @@ pub fn render<'a>(
                         }
                     }
                 } else {
-                    match dispatcher.render(node, &env) {
+                    match ctx.extensions.render(node, &env) {
                         Some(element) => element,
                         None => container(Space::new()).into(),
                     }
@@ -191,23 +175,6 @@ pub fn render<'a>(
 }
 
 // ---------------------------------------------------------------------------
-// Child rendering helper
-// ---------------------------------------------------------------------------
-
-pub(crate) fn render_children<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-    images: &'a crate::image_registry::ImageRegistry,
-    theme: &'a iced::Theme,
-    dispatcher: &'a ExtensionDispatcher,
-) -> Vec<Element<'a, Message>> {
-    node.children
-        .iter()
-        .map(|c| render(c, caches, images, theme, dispatcher))
-        .collect()
-}
-
-// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -217,6 +184,7 @@ mod tests {
     use crate::extensions::ExtensionDispatcher;
     use crate::image_registry::ImageRegistry;
     use crate::protocol::TreeNode;
+    use crate::widgets::WidgetCaches;
 
     // -- Image registry handle lookup --
 
@@ -278,6 +246,22 @@ mod tests {
         smoke_node("child", "text", serde_json::json!({"content": "hi"}))
     }
 
+    fn smoke_ctx<'a>(
+        caches: &'a WidgetCaches,
+        images: &'a ImageRegistry,
+        theme: &'a iced::Theme,
+        dispatcher: &'a ExtensionDispatcher,
+    ) -> RenderCtx<'a> {
+        RenderCtx {
+            caches,
+            images,
+            theme,
+            extensions: dispatcher,
+            default_text_size: None,
+            default_font: None,
+        }
+    }
+
     #[test]
     fn render_smoke_text() {
         let node = smoke_node("t", "text", serde_json::json!({"content": "hello"}));
@@ -285,7 +269,8 @@ mod tests {
         let images = ImageRegistry::new();
         let theme = iced::Theme::Dark;
         let dispatcher = ExtensionDispatcher::default();
-        let _elem = render(&node, &caches, &images, &theme, &dispatcher);
+        let ctx = smoke_ctx(&caches, &images, &theme, &dispatcher);
+        let _elem = render(&node, ctx);
     }
 
     #[test]
@@ -295,7 +280,8 @@ mod tests {
         let images = ImageRegistry::new();
         let theme = iced::Theme::Dark;
         let dispatcher = ExtensionDispatcher::default();
-        let _elem = render(&node, &caches, &images, &theme, &dispatcher);
+        let ctx = smoke_ctx(&caches, &images, &theme, &dispatcher);
+        let _elem = render(&node, ctx);
     }
 
     #[test]
@@ -305,7 +291,8 @@ mod tests {
         let images = ImageRegistry::new();
         let theme = iced::Theme::Dark;
         let dispatcher = ExtensionDispatcher::default();
-        let _elem = render(&node, &caches, &images, &theme, &dispatcher);
+        let ctx = smoke_ctx(&caches, &images, &theme, &dispatcher);
+        let _elem = render(&node, ctx);
     }
 
     #[test]
@@ -320,7 +307,8 @@ mod tests {
         let images = ImageRegistry::new();
         let theme = iced::Theme::Dark;
         let dispatcher = ExtensionDispatcher::default();
-        let _elem = render(&node, &caches, &images, &theme, &dispatcher);
+        let ctx = smoke_ctx(&caches, &images, &theme, &dispatcher);
+        let _elem = render(&node, ctx);
     }
 
     #[test]
@@ -335,7 +323,8 @@ mod tests {
         let images = ImageRegistry::new();
         let theme = iced::Theme::Dark;
         let dispatcher = ExtensionDispatcher::default();
-        let _elem = render(&node, &caches, &images, &theme, &dispatcher);
+        let ctx = smoke_ctx(&caches, &images, &theme, &dispatcher);
+        let _elem = render(&node, ctx);
     }
 
     #[test]
@@ -349,7 +338,8 @@ mod tests {
         let images = ImageRegistry::new();
         let theme = iced::Theme::Dark;
         let dispatcher = ExtensionDispatcher::default();
-        let _elem = render(&node, &caches, &images, &theme, &dispatcher);
+        let ctx = smoke_ctx(&caches, &images, &theme, &dispatcher);
+        let _elem = render(&node, ctx);
     }
 
     #[test]
@@ -359,7 +349,8 @@ mod tests {
         let images = ImageRegistry::new();
         let theme = iced::Theme::Dark;
         let dispatcher = ExtensionDispatcher::default();
-        let _elem = render(&node, &caches, &images, &theme, &dispatcher);
+        let ctx = smoke_ctx(&caches, &images, &theme, &dispatcher);
+        let _elem = render(&node, ctx);
     }
 
     #[test]
@@ -369,7 +360,8 @@ mod tests {
         let images = ImageRegistry::new();
         let theme = iced::Theme::Dark;
         let dispatcher = ExtensionDispatcher::default();
-        let _elem = render(&node, &caches, &images, &theme, &dispatcher);
+        let ctx = smoke_ctx(&caches, &images, &theme, &dispatcher);
+        let _elem = render(&node, ctx);
     }
 
     #[test]
@@ -383,7 +375,8 @@ mod tests {
         let images = ImageRegistry::new();
         let theme = iced::Theme::Dark;
         let dispatcher = ExtensionDispatcher::default();
-        let _elem = render(&node, &caches, &images, &theme, &dispatcher);
+        let ctx = smoke_ctx(&caches, &images, &theme, &dispatcher);
+        let _elem = render(&node, ctx);
     }
 
     #[test]
@@ -397,7 +390,8 @@ mod tests {
         let images = ImageRegistry::new();
         let theme = iced::Theme::Dark;
         let dispatcher = ExtensionDispatcher::default();
-        let _elem = render(&node, &caches, &images, &theme, &dispatcher);
+        let ctx = smoke_ctx(&caches, &images, &theme, &dispatcher);
+        let _elem = render(&node, ctx);
     }
 
     #[test]
@@ -411,7 +405,8 @@ mod tests {
         let images = ImageRegistry::new();
         let theme = iced::Theme::Dark;
         let dispatcher = ExtensionDispatcher::default();
-        let _elem = render(&node, &caches, &images, &theme, &dispatcher);
+        let ctx = smoke_ctx(&caches, &images, &theme, &dispatcher);
+        let _elem = render(&node, ctx);
     }
 
     #[test]
@@ -421,7 +416,8 @@ mod tests {
         let images = ImageRegistry::new();
         let theme = iced::Theme::Dark;
         let dispatcher = ExtensionDispatcher::default();
-        let _elem = render(&node, &caches, &images, &theme, &dispatcher);
+        let ctx = smoke_ctx(&caches, &images, &theme, &dispatcher);
+        let _elem = render(&node, ctx);
     }
 
     #[test]
@@ -431,7 +427,8 @@ mod tests {
         let images = ImageRegistry::new();
         let theme = iced::Theme::Dark;
         let dispatcher = ExtensionDispatcher::default();
-        let _elem = render(&node, &caches, &images, &theme, &dispatcher);
+        let ctx = smoke_ctx(&caches, &images, &theme, &dispatcher);
+        let _elem = render(&node, ctx);
     }
 
     // -----------------------------------------------------------------------
@@ -445,8 +442,9 @@ mod tests {
         let images = ImageRegistry::new();
         let theme = iced::Theme::Dark;
         let dispatcher = ExtensionDispatcher::default();
+        let ctx = smoke_ctx(&caches, &images, &theme, &dispatcher);
         // Should produce the empty container fallback, not panic.
-        let _elem = render(&node, &caches, &images, &theme, &dispatcher);
+        let _elem = render(&node, ctx);
     }
 
     #[test]
@@ -456,7 +454,8 @@ mod tests {
         let images = ImageRegistry::new();
         let theme = iced::Theme::Dark;
         let dispatcher = ExtensionDispatcher::default();
-        let _elem = render(&node, &caches, &images, &theme, &dispatcher);
+        let ctx = smoke_ctx(&caches, &images, &theme, &dispatcher);
+        let _elem = render(&node, ctx);
     }
 
     // -----------------------------------------------------------------------

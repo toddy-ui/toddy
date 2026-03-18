@@ -1060,13 +1060,17 @@ impl App {
         let resolved_theme = self.theme_ref_for_window(window_id);
 
         match self.core.tree.find_window(julep_id) {
-            Some(window_node) => julep_core::widgets::render(
-                window_node,
-                &self.core.caches,
-                &self.image_registry,
-                resolved_theme,
-                &self.dispatcher,
-            ),
+            Some(window_node) => {
+                let ctx = julep_core::extensions::RenderCtx {
+                    caches: &self.core.caches,
+                    images: &self.image_registry,
+                    theme: resolved_theme,
+                    extensions: &self.dispatcher,
+                    default_text_size: self.core.default_text_size,
+                    default_font: self.core.default_font,
+                };
+                julep_core::widgets::render(window_node, ctx)
+            }
             None => container(text("waiting for snapshot..."))
                 .width(Fill)
                 .height(Fill)

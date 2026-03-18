@@ -6,8 +6,8 @@ use iced::widget::{
 use iced::{Element, Font, Length, Pixels, keyboard, widget};
 use serde_json::Value;
 
-use super::caches::WidgetCaches;
 use super::helpers::*;
+use crate::extensions::RenderCtx;
 use crate::message::Message;
 use crate::protocol::TreeNode;
 
@@ -17,13 +17,13 @@ use crate::protocol::TreeNode;
 
 pub(crate) fn render_text_input<'a>(
     node: &'a TreeNode,
-    caches: &'a WidgetCaches,
+    ctx: RenderCtx<'a>,
 ) -> Element<'a, Message> {
     let props = node.props.as_object();
     let value = prop_str(props, "value").unwrap_or_default();
     let placeholder = prop_str(props, "placeholder").unwrap_or_default();
     let width = prop_length(props, "width", Length::Fill);
-    let size = prop_f32(props, "size").or(caches.default_text_size);
+    let size = prop_f32(props, "size").or(ctx.default_text_size);
     let padding = parse_padding_value(props);
     let secure = prop_bool_default(props, "secure", false);
     let id = node.id.clone();
@@ -56,7 +56,7 @@ pub(crate) fn render_text_input<'a>(
     let font = props
         .and_then(|p| p.get("font"))
         .map(parse_font)
-        .or(caches.default_font);
+        .or(ctx.default_font);
     if let Some(f) = font {
         ti = ti.font(f);
     }
@@ -350,14 +350,14 @@ struct KeyRule {
 
 pub(crate) fn render_text_editor<'a>(
     node: &'a TreeNode,
-    caches: &'a WidgetCaches,
+    ctx: RenderCtx<'a>,
 ) -> Element<'a, Message> {
     let props = node.props.as_object();
     let height = prop_length(props, "height", Length::Shrink);
     let placeholder = prop_str(props, "placeholder").unwrap_or_default();
     let id = node.id.clone();
 
-    let content = match caches.editor_contents.get(&node.id) {
+    let content = match ctx.caches.editor_contents.get(&node.id) {
         Some(c) => c,
         None => {
             log::warn!("text_editor cache miss for id={}", node.id);
@@ -376,11 +376,11 @@ pub(crate) fn render_text_editor<'a>(
     let font = props
         .and_then(|p| p.get("font"))
         .map(parse_font)
-        .or(caches.default_font);
+        .or(ctx.default_font);
     if let Some(f) = font {
         te = te.font(f);
     }
-    if let Some(sz) = prop_f32(props, "size").or(caches.default_text_size) {
+    if let Some(sz) = prop_f32(props, "size").or(ctx.default_text_size) {
         te = te.size(sz);
     }
     if let Some(lh) = parse_line_height(props) {
@@ -650,10 +650,7 @@ pub(crate) fn render_text_editor<'a>(
 // Checkbox
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_checkbox<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-) -> Element<'a, Message> {
+pub(crate) fn render_checkbox<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     let props = node.props.as_object();
     let label = prop_str(props, "label").unwrap_or_default();
     let checked = prop_bool_default(props, "checked", false);
@@ -675,13 +672,13 @@ pub(crate) fn render_checkbox<'a>(
     if let Some(sz) = prop_f32(props, "size") {
         cb = cb.size(sz);
     }
-    if let Some(ts) = prop_f32(props, "text_size").or(caches.default_text_size) {
+    if let Some(ts) = prop_f32(props, "text_size").or(ctx.default_text_size) {
         cb = cb.text_size(ts);
     }
     let font = props
         .and_then(|p| p.get("font"))
         .map(parse_font)
-        .or(caches.default_font);
+        .or(ctx.default_font);
     if let Some(f) = font {
         cb = cb.font(f);
     }
@@ -811,10 +808,7 @@ pub(crate) fn render_checkbox<'a>(
 // Toggler
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_toggler<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-) -> Element<'a, Message> {
+pub(crate) fn render_toggler<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     let props = node.props.as_object();
     let is_toggled = prop_bool_default(props, "is_toggled", false);
     let label = prop_str(props, "label");
@@ -839,13 +833,13 @@ pub(crate) fn render_toggler<'a>(
     if let Some(sz) = prop_f32(props, "size") {
         t = t.size(sz);
     }
-    if let Some(ts) = prop_f32(props, "text_size").or(caches.default_text_size) {
+    if let Some(ts) = prop_f32(props, "text_size").or(ctx.default_text_size) {
         t = t.text_size(ts);
     }
     let font = props
         .and_then(|p| p.get("font"))
         .map(parse_font)
-        .or(caches.default_font);
+        .or(ctx.default_font);
     if let Some(f) = font {
         t = t.font(f);
     }
@@ -939,10 +933,7 @@ pub(crate) fn render_toggler<'a>(
 /// all radios in a group with a single event handler.
 ///
 /// Props: `label`, `value`, `selected` (current group value), `group` (event ID).
-pub(crate) fn render_radio<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-) -> Element<'a, Message> {
+pub(crate) fn render_radio<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     let props = node.props.as_object();
     let value = prop_str(props, "value").unwrap_or_default();
     let selected_str = prop_str(props, "selected").unwrap_or_default();
@@ -970,13 +961,13 @@ pub(crate) fn render_radio<'a>(
     if let Some(sz) = prop_f32(props, "size") {
         r = r.size(sz);
     }
-    if let Some(ts) = prop_f32(props, "text_size").or(caches.default_text_size) {
+    if let Some(ts) = prop_f32(props, "text_size").or(ctx.default_text_size) {
         r = r.text_size(ts);
     }
     let font = props
         .and_then(|p| p.get("font"))
         .map(parse_font)
-        .or(caches.default_font);
+        .or(ctx.default_font);
     if let Some(f) = font {
         r = r.font(f);
     }
@@ -1260,10 +1251,7 @@ pub(crate) fn render_vertical_slider<'a>(node: &'a TreeNode) -> Element<'a, Mess
 // Pick List
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_pick_list<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-) -> Element<'a, Message> {
+pub(crate) fn render_pick_list<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     let props = node.props.as_object();
     let options: Vec<String> = props
         .and_then(|p| p.get("options"))
@@ -1288,13 +1276,13 @@ pub(crate) fn render_pick_list<'a>(
     if let Some(p) = placeholder {
         pl = pl.placeholder(p);
     }
-    if let Some(ts) = prop_f32(props, "text_size").or(caches.default_text_size) {
+    if let Some(ts) = prop_f32(props, "text_size").or(ctx.default_text_size) {
         pl = pl.text_size(ts);
     }
     let font = props
         .and_then(|p| p.get("font"))
         .map(parse_font)
-        .or(caches.default_font);
+        .or(ctx.default_font);
     if let Some(f) = font {
         pl = pl.font(f);
     }
@@ -1382,11 +1370,8 @@ pub(crate) fn render_pick_list<'a>(
 // Combo Box
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_combo_box<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-) -> Element<'a, Message> {
-    let state = match caches.combo_states.get(&node.id) {
+pub(crate) fn render_combo_box<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
+    let state = match ctx.caches.combo_states.get(&node.id) {
         Some(s) => s,
         None => {
             log::warn!("combo_box cache miss for id={}", node.id);
@@ -1411,13 +1396,13 @@ pub(crate) fn render_combo_box<'a>(
     // on_input: emit Input events so the host can filter
     cb = cb.on_input(move |v| Message::Input(input_id.clone(), v));
 
-    if let Some(sz) = prop_f32(props, "size").or(caches.default_text_size) {
+    if let Some(sz) = prop_f32(props, "size").or(ctx.default_text_size) {
         cb = cb.size(sz);
     }
     let font = props
         .and_then(|p| p.get("font"))
         .map(parse_font)
-        .or(caches.default_font);
+        .or(ctx.default_font);
     if let Some(f) = font {
         cb = cb.font(f);
     }

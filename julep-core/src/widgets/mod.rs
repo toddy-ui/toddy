@@ -19,5 +19,4 @@ mod validate;
 pub(crate) use caches::MAX_TREE_DEPTH;
 pub use caches::{WidgetCaches, ensure_caches};
 pub use render::render;
-pub(crate) use render::render_children;
 pub use validate::{is_validate_props_enabled, set_validate_props};

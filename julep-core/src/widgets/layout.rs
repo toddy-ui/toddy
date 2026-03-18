@@ -8,9 +8,8 @@ use iced::widget::{
 };
 use iced::{Element, Fill, Length, Point, Vector, widget};
 
-use super::caches::WidgetCaches;
 use super::helpers::*;
-use crate::extensions::ExtensionDispatcher;
+use crate::extensions::RenderCtx;
 use crate::message::{Message, ScrollViewport};
 use crate::protocol::TreeNode;
 
@@ -18,13 +17,7 @@ use crate::protocol::TreeNode;
 // Column
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_column<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-    images: &'a crate::image_registry::ImageRegistry,
-    theme: &'a iced::Theme,
-    dispatcher: &'a ExtensionDispatcher,
-) -> Element<'a, Message> {
+pub(crate) fn render_column<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     let props = node.props.as_object();
     let spacing = prop_f32(props, "spacing").unwrap_or(0.0);
     let padding = parse_padding_value(props);
@@ -33,7 +26,7 @@ pub(crate) fn render_column<'a>(
     let align_x = prop_horizontal_alignment(props, "align_x");
     let clip = prop_bool_default(props, "clip", false);
 
-    let children = super::render_children(node, caches, images, theme, dispatcher);
+    let children = ctx.render_children(node);
 
     let mut col = column(children)
         .spacing(spacing)
@@ -60,13 +53,7 @@ pub(crate) fn render_column<'a>(
 // Row
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_row<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-    images: &'a crate::image_registry::ImageRegistry,
-    theme: &'a iced::Theme,
-    dispatcher: &'a ExtensionDispatcher,
-) -> Element<'a, Message> {
+pub(crate) fn render_row<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     let props = node.props.as_object();
     let spacing = prop_f32(props, "spacing").unwrap_or(0.0);
     let padding = parse_padding_value(props);
@@ -75,7 +62,7 @@ pub(crate) fn render_row<'a>(
     let align_y = prop_vertical_alignment(props, "align_y");
     let clip = prop_bool_default(props, "clip", false);
 
-    let children = super::render_children(node, caches, images, theme, dispatcher);
+    let children = ctx.render_children(node);
 
     let r = row(children)
         .spacing(spacing)
@@ -109,13 +96,7 @@ pub(crate) fn render_row<'a>(
 // Container
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_container<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-    images: &'a crate::image_registry::ImageRegistry,
-    theme: &'a iced::Theme,
-    dispatcher: &'a ExtensionDispatcher,
-) -> Element<'a, Message> {
+pub(crate) fn render_container<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     let props = node.props.as_object();
     let padding = parse_padding_value(props);
     let width = prop_length(props, "width", Length::Shrink);
@@ -126,7 +107,7 @@ pub(crate) fn render_container<'a>(
     let child: Element<'a, Message> = node
         .children
         .first()
-        .map(|c| super::render(c, caches, images, theme, dispatcher))
+        .map(|c| ctx.render_child(c))
         .unwrap_or_else(|| Space::new().into());
 
     let mut c = container(child)
@@ -252,19 +233,13 @@ pub(crate) fn render_container<'a>(
 // Stack
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_stack<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-    images: &'a crate::image_registry::ImageRegistry,
-    theme: &'a iced::Theme,
-    dispatcher: &'a ExtensionDispatcher,
-) -> Element<'a, Message> {
+pub(crate) fn render_stack<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     let props = node.props.as_object();
     let width = prop_length(props, "width", Length::Shrink);
     let height = prop_length(props, "height", Length::Shrink);
     let clip = prop_bool_default(props, "clip", false);
 
-    let children = super::render_children(node, caches, images, theme, dispatcher);
+    let children = ctx.render_children(node);
 
     Stack::with_children(children)
         .width(width)
@@ -277,13 +252,7 @@ pub(crate) fn render_stack<'a>(
 // Grid
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_grid<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-    images: &'a crate::image_registry::ImageRegistry,
-    theme: &'a iced::Theme,
-    dispatcher: &'a ExtensionDispatcher,
-) -> Element<'a, Message> {
+pub(crate) fn render_grid<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     let props = node.props.as_object();
     let cols = props
         .and_then(|p| p.get("columns"))
@@ -294,7 +263,7 @@ pub(crate) fn render_grid<'a>(
     let column_width = prop_length(props, "column_width", Length::Shrink);
     let row_height = prop_length(props, "row_height", Length::Shrink);
 
-    let children = super::render_children(node, caches, images, theme, dispatcher);
+    let children = ctx.render_children(node);
 
     let mut g = grid(children).columns(cols).spacing(spacing);
 
@@ -330,13 +299,7 @@ pub(crate) fn render_grid<'a>(
 // Pin (absolute positioning)
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_pin<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-    images: &'a crate::image_registry::ImageRegistry,
-    theme: &'a iced::Theme,
-    dispatcher: &'a ExtensionDispatcher,
-) -> Element<'a, Message> {
+pub(crate) fn render_pin<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     let props = node.props.as_object();
     let x = prop_f32(props, "x").unwrap_or(0.0);
     let y = prop_f32(props, "y").unwrap_or(0.0);
@@ -346,7 +309,7 @@ pub(crate) fn render_pin<'a>(
     let child: Element<'a, Message> = node
         .children
         .first()
-        .map(|c| super::render(c, caches, images, theme, dispatcher))
+        .map(|c| ctx.render_child(c))
         .unwrap_or_else(|| Space::new().into());
 
     pin(child)
@@ -362,10 +325,7 @@ pub(crate) fn render_pin<'a>(
 
 pub(crate) fn render_keyed_column<'a>(
     node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-    images: &'a crate::image_registry::ImageRegistry,
-    theme: &'a iced::Theme,
-    dispatcher: &'a ExtensionDispatcher,
+    ctx: RenderCtx<'a>,
 ) -> Element<'a, Message> {
     let props = node.props.as_object();
     let spacing = prop_f32(props, "spacing").unwrap_or(0.0);
@@ -380,7 +340,7 @@ pub(crate) fn render_keyed_column<'a>(
             let mut hasher = DefaultHasher::new();
             c.id.hash(&mut hasher);
             let key = hasher.finish();
-            let elem = super::render(c, caches, images, theme, dispatcher);
+            let elem = ctx.render_child(c);
             (key, elem)
         })
         .collect();
@@ -403,19 +363,13 @@ pub(crate) fn render_keyed_column<'a>(
 // Float (floating overlay with scale/translate)
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_float<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-    images: &'a crate::image_registry::ImageRegistry,
-    theme: &'a iced::Theme,
-    dispatcher: &'a ExtensionDispatcher,
-) -> Element<'a, Message> {
+pub(crate) fn render_float<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     let props = node.props.as_object();
 
     let child: Element<'a, Message> = node
         .children
         .first()
-        .map(|c| super::render(c, caches, images, theme, dispatcher))
+        .map(|c| ctx.render_child(c))
         .unwrap_or_else(|| Space::new().into());
 
     let tx = prop_f32(props, "translate_x").unwrap_or(0.0);
@@ -437,10 +391,7 @@ pub(crate) fn render_float<'a>(
 
 pub(crate) fn render_responsive<'a>(
     node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-    images: &'a crate::image_registry::ImageRegistry,
-    theme: &'a iced::Theme,
-    dispatcher: &'a ExtensionDispatcher,
+    ctx: RenderCtx<'a>,
 ) -> Element<'a, Message> {
     // iced's Responsive widget takes a closure that receives Size and returns
     // an Element. Since we can't call back to the host within a single frame,
@@ -453,7 +404,7 @@ pub(crate) fn render_responsive<'a>(
     let child: Element<'a, Message> = node
         .children
         .first()
-        .map(|c| super::render(c, caches, images, theme, dispatcher))
+        .map(|c| ctx.render_child(c))
         .unwrap_or_else(|| Space::new().into());
 
     let resize_id = node.id.clone();
@@ -470,10 +421,7 @@ pub(crate) fn render_responsive<'a>(
 
 pub(crate) fn render_scrollable<'a>(
     node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-    images: &'a crate::image_registry::ImageRegistry,
-    theme: &'a iced::Theme,
-    dispatcher: &'a ExtensionDispatcher,
+    ctx: RenderCtx<'a>,
 ) -> Element<'a, Message> {
     let props = node.props.as_object();
     let width = prop_length(props, "width", Length::Shrink);
@@ -483,7 +431,7 @@ pub(crate) fn render_scrollable<'a>(
     let child: Element<'a, Message> = node
         .children
         .first()
-        .map(|c| super::render(c, caches, images, theme, dispatcher))
+        .map(|c| ctx.render_child(c))
         .unwrap_or_else(|| Space::new().into());
 
     let direction = prop_str(props, "direction").unwrap_or_default();
@@ -586,19 +534,13 @@ pub(crate) fn render_scrollable<'a>(
 // PaneGrid
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_pane_grid<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-    images: &'a crate::image_registry::ImageRegistry,
-    theme: &'a iced::Theme,
-    dispatcher: &'a ExtensionDispatcher,
-) -> Element<'a, Message> {
+pub(crate) fn render_pane_grid<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     let props = node.props.as_object();
     let spacing = prop_f32(props, "spacing").unwrap_or(2.0);
     let width = prop_length(props, "width", Length::Fill);
     let height = prop_length(props, "height", Length::Fill);
 
-    let state = match caches.pane_grid_states.get(&node.id) {
+    let state = match ctx.caches.pane_grid_states.get(&node.id) {
         Some(s) => s,
         None => return text("(pane_grid: no state)").into(),
     };
@@ -608,10 +550,7 @@ pub(crate) fn render_pane_grid<'a>(
     let mut child_map: HashMap<String, Element<'a, Message>> = HashMap::new();
     let mut title_map: HashMap<String, String> = HashMap::new();
     for c in &node.children {
-        child_map.insert(
-            c.id.clone(),
-            super::render(c, caches, images, theme, dispatcher),
-        );
+        child_map.insert(c.id.clone(), ctx.render_child(c));
         if let Some(title) = prop_str(c.props.as_object(), "title") {
             title_map.insert(c.id.clone(), title);
         }

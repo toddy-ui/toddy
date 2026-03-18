@@ -3,8 +3,8 @@ use iced::widget::{Space, canvas, container, progress_bar, rich_text, rule, span
 use iced::{Color, Element, Font, Length, Padding, Pixels, Point, Radians, Rotation, Size, mouse};
 use serde_json::Value;
 
-use super::caches::WidgetCaches;
 use super::helpers::*;
+use crate::extensions::RenderCtx;
 use crate::message::Message;
 use crate::protocol::TreeNode;
 use crate::theming::parse_hex_color;
@@ -13,13 +13,10 @@ use crate::theming::parse_hex_color;
 // Text
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_text<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-) -> Element<'a, Message> {
+pub(crate) fn render_text<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     let props = node.props.as_object();
     let content = prop_str(props, "content").unwrap_or_default();
-    let size = prop_f32(props, "size").or(caches.default_text_size);
+    let size = prop_f32(props, "size").or(ctx.default_text_size);
 
     let mut t = text(content);
     if let Some(s) = size {
@@ -28,7 +25,7 @@ pub(crate) fn render_text<'a>(
     let font = props
         .and_then(|p| p.get("font"))
         .map(parse_font)
-        .or(caches.default_font);
+        .or(ctx.default_font);
     if let Some(f) = font {
         t = t.font(f);
     }
@@ -94,10 +91,7 @@ pub(crate) fn render_text<'a>(
 // Rich Text
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_rich_text<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-) -> Element<'a, Message> {
+pub(crate) fn render_rich_text<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     let props = node.props.as_object();
     let width = prop_length(props, "width", Length::Shrink);
     let height = prop_length(props, "height", Length::Shrink);
@@ -174,13 +168,13 @@ pub(crate) fn render_rich_text<'a>(
     let id = node.id.clone();
     let mut rt = rich_text(span_list).width(width).height(height);
 
-    if let Some(sz) = prop_f32(props, "size").or(caches.default_text_size) {
+    if let Some(sz) = prop_f32(props, "size").or(ctx.default_text_size) {
         rt = rt.size(sz);
     }
     let font = props
         .and_then(|p| p.get("font"))
         .map(parse_font)
-        .or(caches.default_font);
+        .or(ctx.default_font);
     if let Some(f) = font {
         rt = rt.font(f);
     }
@@ -206,10 +200,7 @@ pub(crate) fn render_rich_text<'a>(
 // Image
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_image<'a>(
-    node: &'a TreeNode,
-    images: &'a crate::image_registry::ImageRegistry,
-) -> Element<'a, Message> {
+pub(crate) fn render_image<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     use iced::widget::Image;
     use iced::widget::image::FilterMethod;
 
@@ -227,7 +218,7 @@ pub(crate) fn render_image<'a>(
     let handle: iced::widget::image::Handle = match source_val {
         Some(Value::Object(obj)) => {
             if let Some(name) = obj.get("handle").and_then(|v| v.as_str()) {
-                match images.get(name) {
+                match ctx.images.get(name) {
                     Some(h) => h.clone(),
                     None => {
                         log::warn!("[id={}] image: unknown registry handle: {name}", node.id);
@@ -341,15 +332,11 @@ pub(crate) fn render_svg<'a>(node: &'a TreeNode) -> Element<'a, Message> {
 // Markdown
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_markdown<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-    theme: &'a iced::Theme,
-) -> Element<'a, Message> {
+pub(crate) fn render_markdown<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     use iced::widget::markdown;
 
     let props = node.props.as_object();
-    let items = match caches.markdown_items.get(&node.id) {
+    let items = match ctx.caches.markdown_items.get(&node.id) {
         Some((_hash, items)) => items.as_slice(),
         None => {
             log::warn!("markdown cache miss for id={}", node.id);
@@ -359,50 +346,49 @@ pub(crate) fn render_markdown<'a>(
 
     // Build markdown Settings from props, falling back to theme defaults.
     let link_color = prop_color(props, "link_color");
-    let settings =
-        if let Some(text_size) = prop_f32(props, "text_size").or(caches.default_text_size) {
-            let mut s = markdown::Settings::with_text_size(text_size, markdown::Style::from(theme));
-            if let Some(v) = prop_f32(props, "h1_size") {
-                s.h1_size = Pixels(v);
-            }
-            if let Some(v) = prop_f32(props, "h2_size") {
-                s.h2_size = Pixels(v);
-            }
-            if let Some(v) = prop_f32(props, "h3_size") {
-                s.h3_size = Pixels(v);
-            }
-            if let Some(v) = prop_f32(props, "code_size") {
-                s.code_size = Pixels(v);
-            }
-            if let Some(v) = prop_f32(props, "spacing") {
-                s.spacing = Pixels(v);
-            }
-            if let Some(lc) = link_color {
-                s.style.link_color = lc;
-            }
-            s
-        } else {
-            let mut s = markdown::Settings::from(theme);
-            if let Some(v) = prop_f32(props, "h1_size") {
-                s.h1_size = Pixels(v);
-            }
-            if let Some(v) = prop_f32(props, "h2_size") {
-                s.h2_size = Pixels(v);
-            }
-            if let Some(v) = prop_f32(props, "h3_size") {
-                s.h3_size = Pixels(v);
-            }
-            if let Some(v) = prop_f32(props, "code_size") {
-                s.code_size = Pixels(v);
-            }
-            if let Some(v) = prop_f32(props, "spacing") {
-                s.spacing = Pixels(v);
-            }
-            if let Some(lc) = link_color {
-                s.style.link_color = lc;
-            }
-            s
-        };
+    let settings = if let Some(text_size) = prop_f32(props, "text_size").or(ctx.default_text_size) {
+        let mut s = markdown::Settings::with_text_size(text_size, markdown::Style::from(ctx.theme));
+        if let Some(v) = prop_f32(props, "h1_size") {
+            s.h1_size = Pixels(v);
+        }
+        if let Some(v) = prop_f32(props, "h2_size") {
+            s.h2_size = Pixels(v);
+        }
+        if let Some(v) = prop_f32(props, "h3_size") {
+            s.h3_size = Pixels(v);
+        }
+        if let Some(v) = prop_f32(props, "code_size") {
+            s.code_size = Pixels(v);
+        }
+        if let Some(v) = prop_f32(props, "spacing") {
+            s.spacing = Pixels(v);
+        }
+        if let Some(lc) = link_color {
+            s.style.link_color = lc;
+        }
+        s
+    } else {
+        let mut s = markdown::Settings::from(ctx.theme);
+        if let Some(v) = prop_f32(props, "h1_size") {
+            s.h1_size = Pixels(v);
+        }
+        if let Some(v) = prop_f32(props, "h2_size") {
+            s.h2_size = Pixels(v);
+        }
+        if let Some(v) = prop_f32(props, "h3_size") {
+            s.h3_size = Pixels(v);
+        }
+        if let Some(v) = prop_f32(props, "code_size") {
+            s.code_size = Pixels(v);
+        }
+        if let Some(v) = prop_f32(props, "spacing") {
+            s.spacing = Pixels(v);
+        }
+        if let Some(lc) = link_color {
+            s.style.link_color = lc;
+        }
+        s
+    };
 
     let mut md: Element<'a, Message> = markdown::view(items, settings).map(Message::MarkdownUrl);
 
@@ -614,10 +600,7 @@ impl canvas::Program<Message> for QrCodeProgram<'_> {
     }
 }
 
-pub(crate) fn render_qr_code<'a>(
-    node: &'a TreeNode,
-    caches: &'a WidgetCaches,
-) -> Element<'a, Message> {
+pub(crate) fn render_qr_code<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     let props = node.props.as_object();
     let data = prop_str(props, "data").unwrap_or_default();
     let cell_size = prop_f32(props, "cell_size").unwrap_or(4.0);
@@ -655,7 +638,7 @@ pub(crate) fn render_qr_code<'a>(
 
     let pixel_size = width as f32 * cell_size;
 
-    let cache_entry = caches.qr_code_caches.get(&node.id);
+    let cache_entry = ctx.caches.qr_code_caches.get(&node.id);
 
     canvas(QrCodeProgram {
         modules,
