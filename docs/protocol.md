@@ -144,6 +144,7 @@ Sent as the first message. Configures the renderer.
 ```json
 {
   "type": "settings",
+  "session": "s1",
   "settings": {
     "protocol_version": 1,
     "default_text_size": 14.0,
@@ -186,6 +187,7 @@ diffing required on the host side.
 ```json
 {
   "type": "snapshot",
+  "session": "s1",
   "tree": {
     "id": "root",
     "type": "window",
@@ -206,6 +208,7 @@ for large trees with small changes.
 ```json
 {
   "type": "patch",
+  "session": "s1",
   "ops": [...]
 }
 ```
@@ -282,6 +285,7 @@ this kind so the host can route them.
 ```json
 {
   "type": "subscription_register",
+  "session": "s1",
   "kind": "on_key_press",
   "tag": "my_key_handler"
 }
@@ -322,6 +326,7 @@ Remove a subscription.
 ```json
 {
   "type": "subscription_unregister",
+  "session": "s1",
   "kind": "on_key_press"
 }
 ```
@@ -333,6 +338,7 @@ Perform an operation on a widget (focus, scroll, etc.).
 ```json
 {
   "type": "widget_op",
+  "session": "s1",
   "op": "focus",
   "payload": { "target": "input-1" }
 }
@@ -362,10 +368,14 @@ Perform an operation on a widget (focus, scroll, etc.).
 | `pane_swap` | `target`, `a`, `b` | Swap two panes |
 | `pane_maximize` | `target`, `pane` | Maximize a pane |
 | `pane_restore` | `target` | Restore maximized pane |
-| `tree_hash` | `tag` (optional) | Compute SHA-256 hash of current tree; response via query |
+| `tree_hash` | `tag` (optional) | Compute SHA-256 hash of current tree; response via `widget_query_response` |
+| `find_focused` | `tag` (optional) | Find the currently focused widget; response via `widget_query_response` |
 | `load_font` | `data` (base64 TTF/OTF) | Load a font at runtime |
-| `list_images` | `tag` (optional) | List all image handle names; response via query |
+| `list_images` | `tag` (optional) | List all image handle names; response via `widget_query_response` |
 | `clear_images` | -- | Remove all in-memory image handles |
+
+Widget op query responses (`tree_hash`, `find_focused`, `list_images`)
+use the `widget_query_response` outgoing message type.
 
 ### WindowOp
 
@@ -374,6 +384,7 @@ Manage windows directly (outside of tree-driven sync).
 ```json
 {
   "type": "window_op",
+  "session": "s1",
   "op": "open",
   "window_id": "win-1",
   "settings": { "width": 800, "height": 600, "title": "New Window" }
@@ -434,6 +445,7 @@ Request a platform effect (file dialog, clipboard, notification).
 ```json
 {
   "type": "effect_request",
+  "session": "s1",
   "id": "req-1",
   "kind": "file_open",
   "payload": {
@@ -479,6 +491,7 @@ Manage in-memory image handles for use by image widgets.
 ```json
 {
   "type": "image_op",
+  "session": "s1",
   "op": "create_image",
   "handle": "sprite-1",
   "data": "<base64-encoded PNG/JPEG bytes>"
@@ -490,6 +503,7 @@ Or with raw RGBA pixels:
 ```json
 {
   "type": "image_op",
+  "session": "s1",
   "op": "create_image",
   "handle": "sprite-1",
   "pixels": "<base64-encoded RGBA bytes>",
@@ -516,6 +530,7 @@ data to a chart extension).
 ```json
 {
   "type": "extension_command",
+  "session": "s1",
   "node_id": "chart-1",
   "op": "append_data",
   "payload": { "values": [1.0, 2.5, 3.7] }
@@ -529,12 +544,204 @@ Send multiple extension commands in a single message.
 ```json
 {
   "type": "extension_command_batch",
+  "session": "s1",
   "commands": [
     { "node_id": "chart-1", "op": "append_data", "payload": {...} },
     { "node_id": "chart-2", "op": "clear", "payload": {} }
   ]
 }
 ```
+
+### Query
+
+Inspect the tree or find widgets by selector.
+
+```json
+{
+  "type": "query",
+  "session": "s1",
+  "id": "q1",
+  "target": "find",
+  "selector": {"by": "id", "value": "btn1"}
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Request ID for response correlation |
+| `target` | string | `"find"` (find widget) or `"tree"` (full tree) |
+| `selector` | object | Selector for find queries (see below) |
+
+**Selector format:**
+
+| by | Description |
+|----|-------------|
+| `id` | Find by node ID |
+| `text` | Find by text content |
+| `role` | Find by a11y role |
+| `label` | Find by a11y label |
+| `focused` | Find the focused widget (no value field needed) |
+
+Response: `query_response` with `id`, `target`, `data`.
+
+### Interact
+
+Simulate user interactions (click, type, etc.). Available in both
+daemon and headless modes for programmatic inspection and interaction.
+
+```json
+{
+  "type": "interact",
+  "session": "s1",
+  "id": "i1",
+  "action": "click",
+  "selector": {"by": "id", "value": "submit_btn"},
+  "payload": {}
+}
+```
+
+**Actions and their iced event mappings:**
+
+| Action | Iced events injected | Typical widget response |
+|--------|---------------------|------------------------|
+| `click` | CursorMoved, ButtonPressed, ButtonReleased | Click |
+| `toggle` | CursorMoved, ButtonPressed, ButtonReleased | Toggle |
+| `select` | CursorMoved, ButtonPressed, ButtonReleased | Select |
+| `type_text` | KeyPressed + KeyReleased per character | Input per char |
+| `type_key` | KeyPressed, KeyReleased | Depends on widget |
+| `press` | KeyPressed | Depends on widget |
+| `release` | KeyReleased | Depends on widget |
+| `submit` | KeyPressed(Enter), KeyReleased(Enter) | Submit |
+| `scroll` | WheelScrolled | Scroll |
+| `move_to` | CursorMoved | -- |
+| `slide` | synthetic only | Slide |
+| `paste` | synthetic only | Paste |
+| `sort` | synthetic only | Sort |
+| `canvas_press` | synthetic only | Canvas press |
+| `canvas_release` | synthetic only | Canvas release |
+| `canvas_move` | synthetic only | Canvas move |
+| `pane_focus_cycle` | synthetic only | Pane focus cycle |
+
+Actions marked **synthetic only** have no iced event equivalent
+(e.g. slider requires a precise mouse drag, paste has no iced
+input event). The renderer produces synthetic OutgoingEvents
+directly without widget processing.
+
+In **daemon mode**, all actions produce synthetic events regardless
+-- the interact protocol is a scripting convenience, not a
+substitute for real user input via iced subscriptions.
+
+#### Headless mode: iterative interact with round-trips
+
+In `--headless` mode, the renderer injects iced events one at a
+time. When an event produces widget Messages, the renderer emits
+an `interact_step` and waits for the host to process the events
+and send back a Snapshot with the updated tree before continuing.
+This matches production behaviour where each event triggers a full
+host round-trip.
+
+```
+Host -> Renderer:  interact(type_key, ...)
+Renderer -> Host:  interact_step(events: [key_press])
+Host -> Renderer:  snapshot(updated_tree)
+Renderer -> Host:  interact_step(events: [key_release])
+Host -> Renderer:  snapshot(updated_tree)
+Renderer -> Host:  interact_response(events: [])
+```
+
+The final `interact_response` carries an empty events list when
+steps were used (events were already delivered via steps). For
+actions with no iced events (synthetic-only), no steps are emitted
+and all events are in the final response.
+
+#### Mock mode: synthetic events
+
+In `--mock` mode, there is no iced renderer. All events are
+synthetic -- constructed from the action name and selector without
+widget processing. No `interact_step` messages are emitted. All
+events are in the final `interact_response`.
+
+### TreeHash
+
+Compute a SHA-256 hash of the renderer's current tree (serialized
+as JSON). Used for structural regression testing.
+
+```json
+{
+  "type": "tree_hash",
+  "session": "s1",
+  "id": "th1",
+  "name": "after_click"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Request ID for response correlation |
+| `name` | string | Label for this hash capture |
+
+Response: `tree_hash_response`.
+
+### ScreenshotCapture
+
+Capture rendered pixels. In headless mode, renders the tree via
+tiny-skia and returns RGBA pixel data. In mock mode, returns an
+empty stub.
+
+```json
+{
+  "type": "screenshot_capture",
+  "session": "s1",
+  "id": "sc1",
+  "name": "homepage",
+  "width": 1024,
+  "height": 768
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Request ID |
+| `name` | string | Label for this screenshot |
+| `width` | number | Viewport width in pixels (optional, default 1024) |
+| `height` | number | Viewport height in pixels (optional, default 768) |
+
+Response: `screenshot_response`.
+
+### Reset
+
+Reset all session state: tree, caches, images, theme, extensions.
+In multiplexed mode, the session thread is torn down and the session
+ID can be reused.
+
+```json
+{
+  "type": "reset",
+  "session": "s1",
+  "id": "r1"
+}
+```
+
+Response: `reset_response`.
+
+### AdvanceFrame
+
+Advance the animation clock by one frame. If `on_animation_frame`
+is subscribed, emits an `animation_frame` event with the given
+timestamp. Used for deterministic animation testing in headless/mock
+mode.
+
+```json
+{
+  "type": "advance_frame",
+  "session": "s1",
+  "timestamp": 16000
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `timestamp` | number | Frame timestamp in microseconds |
 
 ---
 
@@ -722,116 +929,53 @@ not as a failure.
 Window query operations (get_size, get_position, etc.) also use this
 format, with the `id` set to the window_id.
 
----
+### query_response
 
-## Binary data
-
-Fields that carry binary data (`pixels`, `data` in ImageOp;
-`rgba` in screenshot responses) are encoded differently depending on
-the wire format:
-
-- **JSON**: Base64-encoded string (standard alphabet, no padding required)
-- **MessagePack**: Native binary type (no encoding needed)
-
-The renderer accepts both formats transparently via a custom
-deserializer.
-
----
-
-## Float handling
-
-All floating-point values in outgoing events are sanitized before
-serialization. NaN and infinity are replaced with `0.0`. This prevents
-JSON serialization errors and ensures all values are valid numbers.
-
----
-
-## Scripting messages
-
-The following message types are available in both daemon and
-headless modes for programmatic inspection and interaction:
-
-- **Query** -- Inspect the tree or find widgets
-- **Interact** -- Simulate user interactions (click, type, etc.)
-- **SnapshotCapture** -- Capture a structural tree hash
-- **ScreenshotCapture** -- Capture rendered pixels
-- **Reset** -- Reset all state
-
-These are commonly used for integration testing but are always
-available as part of the standard protocol.
-
-### Interact flow
-
-The Interact message simulates user input. The renderer converts
-the action into iced events, injects them into the widget tree,
-and captures the resulting widget Messages.
+Response to a Query message.
 
 ```json
 {
-  "type": "interact",
+  "type": "query_response",
   "session": "s1",
-  "id": "i1",
-  "action": "click",
-  "selector": {"by": "id", "value": "submit_btn"},
-  "payload": {}
+  "id": "q1",
+  "target": "find",
+  "data": {"id": "btn1", "type": "button", "props": {}, "children": []}
 }
 ```
 
-**Actions and their iced event mappings:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `session` | string | Session |
+| `id` | string | Matches query request id |
+| `target` | string | Echoes the query target |
+| `data` | any | Query result (node object for find, full tree for tree, null if not found) |
 
-| Action | Iced events injected | Typical widget response |
-|--------|---------------------|------------------------|
-| `click` | CursorMoved, ButtonPressed, ButtonReleased | Click |
-| `toggle` | CursorMoved, ButtonPressed, ButtonReleased | Toggle |
-| `select` | CursorMoved, ButtonPressed, ButtonReleased | Select |
-| `type_text` | KeyPressed + KeyReleased per character | Input per char |
-| `type_key` | KeyPressed, KeyReleased | Depends on widget |
-| `press` | KeyPressed | Depends on widget |
-| `release` | KeyReleased | Depends on widget |
-| `submit` | KeyPressed(Enter), KeyReleased(Enter) | Submit |
-| `scroll` | WheelScrolled | Scroll |
-| `move_to` | CursorMoved | -- |
-| `slide` | synthetic only | Slide |
-| `paste` | synthetic only | Paste |
-| `sort` | synthetic only | Sort |
-| `canvas_press` | synthetic only | Canvas press |
-| `canvas_release` | synthetic only | Canvas release |
-| `canvas_move` | synthetic only | Canvas move |
-| `pane_focus_cycle` | synthetic only | Pane focus cycle |
+### widget_query_response
 
-Actions marked **synthetic only** have no iced event equivalent
-(e.g. slider requires a precise mouse drag, paste has no iced
-input event). The renderer produces synthetic OutgoingEvents
-directly without widget processing.
+Response to widget op queries (`tree_hash`, `find_focused`,
+`list_images`, `system_theme`, `system_info`).
 
-In **daemon mode**, all actions produce synthetic events regardless
--- the interact protocol is a scripting convenience, not a
-substitute for real user input via iced subscriptions.
-
-#### Headless mode: iterative interact with round-trips
-
-In `--headless` mode, the renderer injects iced events one at a
-time. When an event produces widget Messages, the renderer emits
-an `interact_step` and waits for the host to process the events
-and send back a Snapshot with the updated tree before continuing.
-This matches production behaviour where each event triggers a full
-host round-trip.
-
-```
-Host -> Renderer:  interact(type_key, ...)
-Renderer -> Host:  interact_step(events: [key_press])
-Host -> Renderer:  snapshot(updated_tree)
-Renderer -> Host:  interact_step(events: [key_release])
-Host -> Renderer:  snapshot(updated_tree)
-Renderer -> Host:  interact_response(events: [])
+```json
+{
+  "type": "widget_query_response",
+  "session": "s1",
+  "kind": "find_focused",
+  "tag": "focus_check",
+  "data": {"focused": "input1"}
+}
 ```
 
-The final `interact_response` carries an empty events list when
-steps were used (events were already delivered via steps). For
-actions with no iced events (synthetic-only), no steps are emitted
-and all events are in the final response.
+| Field | Type | Description |
+|-------|------|-------------|
+| `session` | string | Session |
+| `kind` | string | Query kind (tree_hash, find_focused, list_images, system_theme, system_info) |
+| `tag` | string | Tag from the widget op request |
+| `data` | object | Query-specific result |
 
-**interact_step:**
+### interact_step
+
+Emitted during headless iterative interact when an injected iced
+event produces widget Messages.
 
 ```json
 {
@@ -853,7 +997,10 @@ The host must process the events (update model, re-render tree)
 and send a Snapshot or Patch back to the renderer before the next
 event is injected.
 
-**interact_response (final):**
+### interact_response
+
+Final response to an Interact message, signalling the interaction
+is complete.
 
 ```json
 {
@@ -871,18 +1018,78 @@ event is injected.
 | `id` | string | Matches the interact request id |
 | `events` | array | Empty when steps were used; contains all events for synthetic/mock actions |
 
-The `interact_response` signals the interaction is complete. In
-headless mode with steps, the events list is empty (all events
+In headless mode with steps, the events list is empty (all events
 were delivered via prior `interact_step` messages). In mock mode
 or for synthetic-only actions, no steps are emitted and all events
 are in this final response.
 
-#### Mock mode: synthetic events
+### tree_hash_response
 
-In `--mock` mode, there is no iced renderer. All events are
-synthetic -- constructed from the action name and selector without
-widget processing. No `interact_step` messages are emitted. All
-events are in the final `interact_response`.
+Response to a TreeHash message.
+
+```json
+{
+  "type": "tree_hash_response",
+  "session": "s1",
+  "id": "th1",
+  "name": "after_click",
+  "hash": "a1b2c3...",
+  "width": 0,
+  "height": 0
+}
+```
+
+### screenshot_response
+
+Response to a ScreenshotCapture message.
+
+```json
+{
+  "type": "screenshot_response",
+  "session": "s1",
+  "id": "sc1",
+  "name": "homepage",
+  "hash": "d4e5f6...",
+  "width": 1024,
+  "height": 768,
+  "rgba": "<binary pixel data>"
+}
+```
+
+### reset_response
+
+Response to a Reset message.
+
+```json
+{
+  "type": "reset_response",
+  "session": "s1",
+  "id": "r1",
+  "status": "ok"
+}
+```
+
+---
+
+## Binary data
+
+Fields that carry binary data (`pixels`, `data` in ImageOp;
+`rgba` in screenshot responses) are encoded differently depending on
+the wire format:
+
+- **JSON**: Base64-encoded string (standard alphabet, no padding required)
+- **MessagePack**: Native binary type (no encoding needed)
+
+The renderer accepts both formats transparently via a custom
+deserializer.
+
+---
+
+## Float handling
+
+All floating-point values in outgoing events are sanitized before
+serialization. NaN and infinity are replaced with `0.0`. This prevents
+JSON serialization errors and ensures all values are valid numbers.
 
 ---
 
