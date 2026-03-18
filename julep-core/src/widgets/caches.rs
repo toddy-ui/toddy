@@ -1,3 +1,15 @@
+//! Widget cache management.
+//!
+//! Several iced widgets (`text_editor`, `markdown`, `combo_box`, `canvas`,
+//! `pane_grid`) require mutable state that must persist across renders, but
+//! iced's `view()` only has `&self`. The solution: [`ensure_caches`] runs
+//! during `apply()` (mutable context) to populate [`WidgetCaches`], and
+//! `render()` in `view()` reads them immutably. No `RefCell` needed.
+//!
+//! Caches are keyed by node ID and automatically pruned when nodes leave
+//! the tree. Content-addressed hashing detects prop changes without
+//! clobbering user edits (e.g. a text_editor's cursor position).
+
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
@@ -15,12 +27,20 @@ use crate::protocol::TreeNode;
 /// rarely exceed 20-30 levels; 256 is generous.
 pub(crate) const MAX_TREE_DEPTH: usize = 256;
 
+/// Maximum recursion depth for [`hash_json_value`]. JSON values within
+/// props (e.g. canvas shapes) can be arbitrarily nested. Bounded to
+/// match [`MAX_TREE_DEPTH`] for consistency.
+const MAX_HASH_DEPTH: usize = 256;
+
 // ---------------------------------------------------------------------------
 // Widget caches
 // ---------------------------------------------------------------------------
 
-/// Bundles all per-widget caches into a single struct so render functions
-/// don't need to thread 3+ separate HashMap parameters everywhere.
+/// Per-widget mutable state that persists across renders.
+///
+/// Fields are `pub(crate)` to avoid leaking internal HashMap structure
+/// to extension authors. The renderer binary accesses specific entries
+/// through the accessor methods below.
 pub struct WidgetCaches {
     pub(crate) editor_contents: HashMap<String, text_editor::Content>,
     /// Tracks the hash of the last-synced "content" prop for each text_editor.
@@ -39,8 +59,13 @@ pub struct WidgetCaches {
     /// Resolved themes for Themer widget nodes. Populated in ensure_caches()
     /// so render_themer() can borrow them with the correct lifetime.
     pub(crate) themer_themes: HashMap<String, iced::Theme>,
+    /// Global default text size from Settings. Survives [`clear_builtin`]
+    /// because it's a session-level setting, not a per-tree cache entry.
     pub(crate) default_text_size: Option<f32>,
+    /// Global default font from Settings. Same lifetime as `default_text_size`.
     pub(crate) default_font: Option<Font>,
+    /// Extension-owned caches. Public so extension authors can access
+    /// their own cached state during render/prepare/cleanup.
     pub extension: crate::extensions::ExtensionCaches,
 }
 
@@ -92,7 +117,8 @@ impl WidgetCaches {
         self.pane_grid_states.get(id)
     }
 
-    /// Clear built-in widget caches without touching extension caches.
+    /// Clear per-node widget caches without touching extension caches or
+    /// session-level settings (`default_text_size`, `default_font`).
     ///
     /// Used by the Snapshot handler so that extension cleanup callbacks
     /// (via `ExtensionDispatcher::prepare_all`) can run before the
@@ -394,10 +420,22 @@ pub(crate) fn canvas_layer_map(
 
 /// Hash a serde_json::Value recursively without allocating a serialized string.
 /// Each variant is discriminated by a type tag byte to avoid collisions.
+/// Recursion is bounded by [`MAX_HASH_DEPTH`].
 ///
 /// NOTE: DefaultHasher output is not stable across Rust versions or builds.
 /// These hashes must never be persisted or compared across process restarts.
 pub(crate) fn hash_json_value(v: &serde_json::Value, h: &mut impl std::hash::Hasher) {
+    hash_json_value_inner(v, h, 0);
+}
+
+fn hash_json_value_inner(v: &serde_json::Value, h: &mut impl std::hash::Hasher, depth: usize) {
+    if depth > MAX_HASH_DEPTH {
+        // Treat excessively nested values as opaque. This changes the
+        // hash (vs. recursing further) but is safe -- worst case is an
+        // unnecessary cache invalidation.
+        6u8.hash(h);
+        return;
+    }
     match v {
         serde_json::Value::Null => 0u8.hash(h),
         serde_json::Value::Bool(b) => {
@@ -422,7 +460,7 @@ pub(crate) fn hash_json_value(v: &serde_json::Value, h: &mut impl std::hash::Has
             4u8.hash(h);
             arr.len().hash(h);
             for item in arr {
-                hash_json_value(item, h);
+                hash_json_value_inner(item, h, depth + 1);
             }
         }
         serde_json::Value::Object(obj) => {
@@ -430,7 +468,7 @@ pub(crate) fn hash_json_value(v: &serde_json::Value, h: &mut impl std::hash::Has
             obj.len().hash(h);
             for (k, v) in obj {
                 k.hash(h);
-                hash_json_value(v, h);
+                hash_json_value_inner(v, h, depth + 1);
             }
         }
     }
