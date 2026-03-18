@@ -16,6 +16,17 @@ use super::constants::*;
 use super::emitters;
 use super::window_map;
 
+/// Validate and clamp a scale factor. Returns 1.0 for invalid values
+/// (zero, negative, NaN, infinity).
+pub(super) fn validate_scale_factor(sf: f32) -> f32 {
+    if sf <= 0.0 || !sf.is_finite() {
+        log::warn!("invalid scale_factor {sf}, using 1.0");
+        1.0
+    } else {
+        sf
+    }
+}
+
 // ---------------------------------------------------------------------------
 // App state
 // ---------------------------------------------------------------------------
@@ -108,12 +119,7 @@ impl App {
             .and_then(|v| v.as_f64())
             .map(|v| v as f32)
             .unwrap_or(self.scale_factor);
-        if sf <= 0.0 || !sf.is_finite() {
-            log::warn!("invalid scale_factor {sf} for window {window_id:?}, using 1.0");
-            1.0
-        } else {
-            sf
-        }
+        validate_scale_factor(sf)
     }
 
     /// Check if a subscription event should be emitted, and if so, emit it.

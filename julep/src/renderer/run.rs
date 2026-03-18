@@ -21,31 +21,30 @@ pub(crate) fn run(builder: julep_core::app::JulepAppBuilder) -> iced::Result {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
 
     // Parse codec flags early so all modes (headless, test, normal) can use them.
-    let forced_codec = if args.contains(&"--msgpack".to_string()) {
+    let has_flag = |flag: &str| args.iter().any(|a| a == flag);
+    let forced_codec = if has_flag("--msgpack") {
         Some(Codec::MsgPack)
-    } else if args.contains(&"--json".to_string()) {
+    } else if has_flag("--json") {
         Some(Codec::Json)
     } else {
         None
     };
 
-    {
-        if args.contains(&"--mock".to_string()) {
-            crate::headless::run(
-                forced_codec,
-                builder.build_dispatcher(),
-                crate::headless::Mode::Mock,
-            );
-            return Ok(());
-        }
-        if args.contains(&"--headless".to_string()) {
-            crate::headless::run(
-                forced_codec,
-                builder.build_dispatcher(),
-                crate::headless::Mode::Headless,
-            );
-            return Ok(());
-        }
+    if has_flag("--mock") {
+        crate::headless::run(
+            forced_codec,
+            builder.build_dispatcher(),
+            crate::headless::Mode::Mock,
+        );
+        return Ok(());
+    }
+    if has_flag("--headless") {
+        crate::headless::run(
+            forced_codec,
+            builder.build_dispatcher(),
+            crate::headless::Mode::Headless,
+        );
+        return Ok(());
     }
 
     // Read the first message synchronously to get iced settings and font
@@ -88,20 +87,27 @@ pub(crate) fn run(builder: julep_core::app::JulepAppBuilder) -> iced::Result {
             let mut app = App::new(dispatcher);
 
             // Extract scale_factor before applying settings to Core
-            let sf = settings
-                .get("scale_factor")
-                .and_then(|v| v.as_f64())
-                .map(|v| v as f32)
-                .unwrap_or(1.0);
-            app.scale_factor = if sf <= 0.0 || !sf.is_finite() {
-                log::warn!("invalid initial scale_factor {sf}, using 1.0");
-                1.0
-            } else {
-                sf
-            };
+            app.scale_factor = super::app::validate_scale_factor(
+                settings
+                    .get("scale_factor")
+                    .and_then(|v| v.as_f64())
+                    .map(|v| v as f32)
+                    .unwrap_or(1.0),
+            );
 
-            // Apply initial settings to Core (Settings doesn't produce effects)
-            let _ = app.core.apply(IncomingMessage::Settings { settings });
+            // Apply initial settings to Core. Handle any effects (e.g.
+            // ExtensionConfig when the Settings includes extension_config).
+            let effects = app.core.apply(IncomingMessage::Settings { settings });
+            for effect in effects {
+                match effect {
+                    julep_core::engine::CoreEffect::ExtensionConfig(config) => {
+                        app.dispatcher.init_all(&config);
+                    }
+                    other => {
+                        log::warn!("unexpected effect from initial Settings: {other:?}");
+                    }
+                }
+            }
 
             // Build font load tasks
             let font_tasks: Vec<Task<Message>> = fonts
