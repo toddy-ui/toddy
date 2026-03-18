@@ -1,7 +1,7 @@
 //! Stdin I/O: initial settings reader, background reader thread, and
 //! the iced subscription that bridges stdin events into the update loop.
 
-use std::io::{self, BufRead, Read, Write};
+use std::io::{self, BufRead, Write};
 use std::sync::Mutex;
 use std::thread;
 
@@ -12,6 +12,20 @@ use julep_core::codec::Codec;
 use julep_core::message::StdinEvent;
 use julep_core::protocol::IncomingMessage;
 use serde_json::Value;
+
+/// Emit an error message to stdout and exit the process. Used for
+/// fatal startup failures (decode error, protocol version mismatch)
+/// where the daemon cannot proceed.
+fn startup_exit(codec: &Codec, message: &str) -> ! {
+    log::error!("{message}");
+    let error = serde_json::json!({"type": "error", "message": message});
+    if let Ok(bytes) = codec.encode(&error) {
+        let mut out = io::stdout().lock();
+        let _ = out.write_all(&bytes);
+        let _ = out.flush();
+    }
+    std::process::exit(1);
+}
 
 /// Default return value for `read_initial_settings` error paths.
 /// Returns empty settings, default iced config, no fonts, and the
@@ -113,84 +127,42 @@ pub(crate) fn read_initial_settings(
 
     // Determine codec: forced by CLI flag, or auto-detected from first byte.
     //
-    // Auto-detect reads one byte to determine the format: '{' (0x7B) = JSON,
-    // anything else = MsgPack length prefix. We use read_exact (blocking) rather
-    // than fill_buf (non-blocking peek) because fill_buf on a pipe can return
-    // empty before the writer has sent any data, causing a false EOF.
-    //
-    // Since the detection byte is consumed, we read the rest of the first
-    // message manually (the remaining 3 bytes of the MsgPack length prefix,
-    // or the rest of the JSON line).
-    let (codec, first_byte) = match forced_codec {
-        Some(c) => (c, None),
+    // Auto-detect peeks at the first byte via fill_buf() (which blocks until
+    // data arrives on the pipe) without consuming it, so read_message() can
+    // read the full message normally including the detection byte.
+    let codec = match forced_codec {
+        Some(c) => c,
         None => {
-            let mut first = [0u8; 1];
-            match reader.read_exact(&mut first) {
-                Ok(()) => {}
+            let buf = match reader.fill_buf() {
+                Ok(buf) if !buf.is_empty() => buf,
+                Ok(_) => {
+                    log::error!("stdin closed before settings received");
+                    Codec::set_global(Codec::MsgPack);
+                    return empty_settings(reader);
+                }
                 Err(e) => {
                     log::error!("stdin closed before settings received: {e}");
                     Codec::set_global(Codec::MsgPack);
                     return empty_settings(reader);
                 }
-            }
-            (Codec::detect_from_first_byte(first[0]), Some(first[0]))
+            };
+            Codec::detect_from_first_byte(buf[0])
         }
     };
     log::info!("wire codec: {codec}");
     Codec::set_global(codec);
 
-    // Read the first framed message. If we consumed a detection byte, we need
-    // to account for it when reading the rest of the message.
-    let payload = if let Some(byte) = first_byte {
-        match codec {
-            Codec::MsgPack => {
-                // byte is the first of the 4-byte BE length prefix. Read 3 more.
-                let mut rest = [0u8; 3];
-                if let Err(e) = reader.read_exact(&mut rest) {
-                    log::error!("failed to read initial settings: {e}");
-                    return empty_settings(reader);
-                }
-                let len = u32::from_be_bytes([byte, rest[0], rest[1], rest[2]]) as usize;
-                if len == 0 || len > julep_core::codec::MAX_MESSAGE_SIZE {
-                    log::error!(
-                        "initial settings frame size invalid ({len} bytes, \
-                         limit {} bytes)",
-                        julep_core::codec::MAX_MESSAGE_SIZE
-                    );
-                    return empty_settings(reader);
-                }
-                let mut payload = vec![0u8; len];
-                if let Err(e) = reader.read_exact(&mut payload) {
-                    log::error!("failed to read initial settings payload: {e}");
-                    return empty_settings(reader);
-                }
-                payload
-            }
-            Codec::Json => {
-                // byte is '{'. Read the rest of the line, prepend '{'.
-                // Wrap in Take to bound allocation before the full line is read.
-                let mut line = String::new();
-                let limit = (julep_core::codec::MAX_MESSAGE_SIZE + 1) as u64;
-                if let Err(e) = (&mut reader).take(limit).read_line(&mut line) {
-                    log::error!("failed to read initial settings: {e}");
-                    return empty_settings(reader);
-                }
-                let full = format!("{}{}", byte as char, line.trim());
-                full.into_bytes()
-            }
+    // Read the first framed message. The detection byte (if auto-detected)
+    // is still in the buffer, so read_message works normally.
+    let payload = match codec.read_message(&mut reader) {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => {
+            log::error!("stdin closed before settings received");
+            return empty_settings(reader);
         }
-    } else {
-        // Forced codec -- no detection byte consumed. Use normal read_message.
-        match codec.read_message(&mut reader) {
-            Ok(Some(bytes)) => bytes,
-            Ok(None) => {
-                log::error!("stdin closed before settings received");
-                return empty_settings(reader);
-            }
-            Err(e) => {
-                log::error!("failed to read initial settings: {e}");
-                return empty_settings(reader);
-            }
+        Err(e) => {
+            log::error!("failed to read initial settings: {e}");
+            return empty_settings(reader);
         }
     };
 
@@ -198,26 +170,7 @@ pub(crate) fn read_initial_settings(
     let msg: IncomingMessage = match codec.decode(&payload) {
         Ok(m) => m,
         Err(err) => {
-            log::error!("failed to decode initial settings: {err}");
-            if forced_codec.is_some() {
-                // Emit error in the forced codec's format so the client can decode it.
-                let error = serde_json::json!({"type": "error", "message": format!("decode failed: {err}")});
-                let fallback =
-                    format!("{{\"type\":\"error\",\"message\":\"decode failed: {err}\"}}\n");
-                let bytes = codec
-                    .encode(&error)
-                    .unwrap_or_else(|_| fallback.into_bytes());
-                let _ = io::stdout().lock().write_all(&bytes);
-                let _ = io::stdout().lock().flush();
-            } else {
-                // No forced codec -- emit plain JSON error for diagnostics.
-                let error_msg = format!(
-                    "{{\"type\":\"error\",\"message\":\"failed to decode initial settings: {err}\"}}\n"
-                );
-                let _ = io::stdout().lock().write_all(error_msg.as_bytes());
-                let _ = io::stdout().lock().flush();
-            }
-            std::process::exit(1);
+            startup_exit(&codec, &format!("failed to decode initial settings: {err}"));
         }
     };
 
@@ -232,18 +185,12 @@ pub(crate) fn read_initial_settings(
             let expected = u64::from(julep_core::protocol::PROTOCOL_VERSION);
             if let Some(version) = settings.get("protocol_version").and_then(|v| v.as_u64()) {
                 if version != expected {
-                    log::error!(
-                        "protocol version mismatch: host sent {}, renderer expects {}",
-                        version,
-                        expected
+                    startup_exit(
+                        &codec,
+                        &format!(
+                            "protocol version mismatch: host sent {version}, renderer expects {expected}"
+                        ),
                     );
-                    let error_msg = format!(
-                        "{{\"type\":\"error\",\"message\":\"protocol version mismatch: \
-                         host sent {version}, renderer expects {expected}\"}}\n"
-                    );
-                    let _ = io::stdout().lock().write_all(error_msg.as_bytes());
-                    let _ = io::stdout().lock().flush();
-                    std::process::exit(1);
                 }
             } else {
                 log::warn!(
