@@ -1,3 +1,8 @@
+//! Window operations: open, close, resize, move, maximize, fullscreen,
+//! decorations, icon, queries (size, position, mode, scale factor), and
+//! window sync. Dispatched from [`CoreEffect::WindowOp`] via the `op`
+//! string, `window_id`, and JSON `settings`.
+
 use std::collections::HashSet;
 
 use base64::Engine as _;
@@ -70,6 +75,8 @@ impl App {
                         if let Some(resizable) = obj.get("resizable").and_then(|v| v.as_bool()) {
                             tasks.push(window::set_resizable(iced_id, resizable));
                         }
+                        // Note: visible and fullscreen both call set_mode. If both are
+                        // present, the last one wins. Hosts should not set both.
                         if let Some(visible) = obj.get("visible").and_then(|v| v.as_bool()) {
                             let mode = if visible {
                                 window::Mode::Windowed
@@ -803,22 +810,9 @@ pub(super) fn parse_window_settings(v: &serde_json::Value) -> window::Settings {
 }
 
 fn parse_optional_size(v: &serde_json::Value) -> Option<Size> {
-    if v.is_null() || !v.is_object() {
-        // Also accept from the parent settings object directly for set_min_size/set_max_size ops
-        let w = v.get("width").and_then(|v| v.as_f64());
-        let h = v.get("height").and_then(|v| v.as_f64());
-        match (w, h) {
-            (Some(w), Some(h)) => Some(Size::new(w as f32, h as f32)),
-            _ => None,
-        }
-    } else {
-        let w = v.get("width").and_then(|v| v.as_f64());
-        let h = v.get("height").and_then(|v| v.as_f64());
-        match (w, h) {
-            (Some(w), Some(h)) => Some(Size::new(w as f32, h as f32)),
-            _ => None,
-        }
-    }
+    let w = v.get("width").and_then(|v| v.as_f64())? as f32;
+    let h = v.get("height").and_then(|v| v.as_f64())? as f32;
+    Some(Size::new(w, h))
 }
 
 fn parse_window_level(s: &str) -> window::Level {
