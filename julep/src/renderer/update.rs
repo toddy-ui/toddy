@@ -16,12 +16,23 @@ impl App {
         match message {
             Message::Stdin(event) => self.handle_stdin(event),
             Message::NoOp => Task::none(),
-            // Simple widget events: map through message_to_event and emit.
+            // Direct-emit widget events: convert via message_to_event and emit.
+            // These need no state mutation, extension routing, or subscription
+            // lookup -- just a straight Message -> OutgoingEvent -> stdout.
             ref msg @ (Message::Click(_)
             | Message::Input(..)
             | Message::Submit(..)
             | Message::Toggle(..)
-            | Message::Select(..)) => match message_to_event(msg) {
+            | Message::Select(..)
+            | Message::Paste(..)
+            | Message::OptionHovered(..)
+            | Message::SensorResize(..)
+            | Message::ScrollEvent(..)
+            | Message::MouseAreaEvent(..)
+            | Message::MouseAreaMove(..)
+            | Message::MouseAreaScroll(..)
+            | Message::CanvasEvent { .. }
+            | Message::CanvasScroll { .. }) => match message_to_event(msg) {
                 Some(event) => emitters::emit_or_exit(event),
                 None => Task::none(),
             },
@@ -247,30 +258,6 @@ impl App {
                     Task::none()
                 }
             }
-            Message::SensorResize(id, width, height) => {
-                emitters::emit_or_exit(OutgoingEvent::sensor_resize(id, width, height))
-            }
-            Message::CanvasEvent {
-                id,
-                kind,
-                x,
-                y,
-                extra,
-            } => match kind.as_str() {
-                "press" => emitters::emit_or_exit(OutgoingEvent::canvas_press(id, x, y, extra)),
-                "release" => emitters::emit_or_exit(OutgoingEvent::canvas_release(id, x, y, extra)),
-                "move" => emitters::emit_or_exit(OutgoingEvent::canvas_move(id, x, y)),
-                _ => Task::none(),
-            },
-            Message::CanvasScroll {
-                id,
-                cursor_x,
-                cursor_y,
-                delta_x,
-                delta_y,
-            } => emitters::emit_or_exit(OutgoingEvent::canvas_scroll(
-                id, cursor_x, cursor_y, delta_x, delta_y,
-            )),
             Message::PaneResized(grid_id, evt) => self.handle_pane_resized(grid_id, evt),
             Message::PaneDragged(grid_id, evt) => self.handle_pane_dragged(grid_id, evt),
             Message::PaneClicked(grid_id, pane) => self.handle_pane_clicked(grid_id, pane),
@@ -282,40 +269,6 @@ impl App {
                     ));
                 }
                 Task::none()
-            }
-            Message::ScrollEvent(id, viewport) => emitters::emit_or_exit(OutgoingEvent::scroll(
-                id,
-                viewport.absolute_x,
-                viewport.absolute_y,
-                viewport.relative_x,
-                viewport.relative_y,
-                viewport.viewport_width,
-                viewport.viewport_height,
-                viewport.content_width,
-                viewport.content_height,
-            )),
-            Message::Paste(id, text) => emitters::emit_or_exit(OutgoingEvent::paste(id, text)),
-            Message::OptionHovered(id, value) => {
-                emitters::emit_or_exit(OutgoingEvent::option_hovered(id, value))
-            }
-            Message::MouseAreaEvent(id, kind) => {
-                let event = match kind.as_str() {
-                    "right_press" => OutgoingEvent::mouse_right_press(id),
-                    "right_release" => OutgoingEvent::mouse_right_release(id),
-                    "middle_press" => OutgoingEvent::mouse_middle_press(id),
-                    "middle_release" => OutgoingEvent::mouse_middle_release(id),
-                    "double_click" => OutgoingEvent::mouse_double_click(id),
-                    "enter" => OutgoingEvent::mouse_enter(id),
-                    "exit" => OutgoingEvent::mouse_exit(id),
-                    _ => return Task::none(),
-                };
-                emitters::emit_or_exit(event)
-            }
-            Message::MouseAreaMove(id, x, y) => {
-                emitters::emit_or_exit(OutgoingEvent::mouse_area_move(id, x, y))
-            }
-            Message::MouseAreaScroll(id, dx, dy) => {
-                emitters::emit_or_exit(OutgoingEvent::mouse_area_scroll(id, dx, dy))
             }
         }
     }

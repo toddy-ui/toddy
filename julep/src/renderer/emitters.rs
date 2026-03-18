@@ -147,18 +147,37 @@ pub(crate) fn emit_screenshot_response(
 // Message -> OutgoingEvent mapping
 // ---------------------------------------------------------------------------
 
-/// Convert a widget Message to an OutgoingEvent, if applicable.
-/// Returns None for messages that don't map to user-initiated widget events
-/// (Stdin, NoOp, keyboard, mouse, window lifecycle, etc.)
+/// Convert a widget [`Message`] to an [`OutgoingEvent`], if applicable.
+///
+/// Covers all message variants that emit directly without special
+/// handling (no state mutation, no extension routing, no subscription
+/// lookup). Messages that need special handling (Slide, Event with
+/// extension dispatcher, TextEditorAction, keyboard/mouse/touch/IME
+/// subscription events, window lifecycle) return `None` and are
+/// handled by dedicated arms in `update()`.
 pub(crate) fn message_to_event(msg: &Message) -> Option<OutgoingEvent> {
     match msg {
         Message::Click(id) => Some(OutgoingEvent::click(id.clone())),
         Message::Input(id, value) => Some(OutgoingEvent::input(id.clone(), value.clone())),
         Message::Submit(id, value) => Some(OutgoingEvent::submit(id.clone(), value.clone())),
         Message::Toggle(id, value) => Some(OutgoingEvent::toggle(id.clone(), *value)),
-        Message::Slide(..) | Message::SlideRelease(..) => None,
         Message::Select(id, value) => Some(OutgoingEvent::select(id.clone(), value.clone())),
+        Message::Paste(id, text) => Some(OutgoingEvent::paste(id.clone(), text.clone())),
+        Message::OptionHovered(id, value) => {
+            Some(OutgoingEvent::option_hovered(id.clone(), value.clone()))
+        }
         Message::SensorResize(id, w, h) => Some(OutgoingEvent::sensor_resize(id.clone(), *w, *h)),
+        Message::ScrollEvent(id, viewport) => Some(OutgoingEvent::scroll(
+            id.clone(),
+            viewport.absolute_x,
+            viewport.absolute_y,
+            viewport.relative_x,
+            viewport.relative_y,
+            viewport.viewport_width,
+            viewport.viewport_height,
+            viewport.content_width,
+            viewport.content_height,
+        )),
         Message::MouseAreaEvent(id, kind) => match kind.as_str() {
             "right_press" => Some(OutgoingEvent::mouse_right_press(id.clone())),
             "right_release" => Some(OutgoingEvent::mouse_right_release(id.clone())),
@@ -175,25 +194,41 @@ pub(crate) fn message_to_event(msg: &Message) -> Option<OutgoingEvent> {
         Message::MouseAreaScroll(id, dx, dy) => {
             Some(OutgoingEvent::mouse_area_scroll(id.clone(), *dx, *dy))
         }
-        Message::ScrollEvent(id, viewport) => Some(OutgoingEvent::scroll(
+        Message::CanvasEvent {
+            id,
+            kind,
+            x,
+            y,
+            extra,
+        } => match kind.as_str() {
+            "press" => Some(OutgoingEvent::canvas_press(
+                id.clone(),
+                *x,
+                *y,
+                extra.clone(),
+            )),
+            "release" => Some(OutgoingEvent::canvas_release(
+                id.clone(),
+                *x,
+                *y,
+                extra.clone(),
+            )),
+            "move" => Some(OutgoingEvent::canvas_move(id.clone(), *x, *y)),
+            _ => None,
+        },
+        Message::CanvasScroll {
+            id,
+            cursor_x,
+            cursor_y,
+            delta_x,
+            delta_y,
+        } => Some(OutgoingEvent::canvas_scroll(
             id.clone(),
-            viewport.absolute_x,
-            viewport.absolute_y,
-            viewport.relative_x,
-            viewport.relative_y,
-            viewport.viewport_width,
-            viewport.viewport_height,
-            viewport.content_width,
-            viewport.content_height,
+            *cursor_x,
+            *cursor_y,
+            *delta_x,
+            *delta_y,
         )),
-        Message::Event { id, data, family } => {
-            let data_opt = if data.is_null() {
-                None
-            } else {
-                Some(data.clone())
-            };
-            Some(OutgoingEvent::generic(family.clone(), id.clone(), data_opt))
-        }
         _ => None,
     }
 }
@@ -287,26 +322,67 @@ mod tests {
     }
 
     #[test]
-    fn message_to_event_generic_event() {
+    fn message_to_event_paste() {
+        let msg = Message::Paste("f1".into(), "pasted text".into());
+        let event = message_to_event(&msg).unwrap();
+        assert_eq!(event.family, "paste");
+    }
+
+    #[test]
+    fn message_to_event_option_hovered() {
+        let msg = Message::OptionHovered("pick1".into(), "opt_a".into());
+        let event = message_to_event(&msg).unwrap();
+        assert_eq!(event.family, "option_hovered");
+    }
+
+    #[test]
+    fn message_to_event_canvas_events() {
+        for kind in &["press", "release", "move"] {
+            let msg = Message::CanvasEvent {
+                id: "c1".into(),
+                kind: kind.to_string(),
+                x: 10.0,
+                y: 20.0,
+                extra: String::new(),
+            };
+            assert!(
+                message_to_event(&msg).is_some(),
+                "canvas event `{kind}` should map"
+            );
+        }
+        // Unknown canvas event kind
+        let msg = Message::CanvasEvent {
+            id: "c1".into(),
+            kind: "unknown".into(),
+            x: 0.0,
+            y: 0.0,
+            extra: String::new(),
+        };
+        assert!(message_to_event(&msg).is_none());
+    }
+
+    #[test]
+    fn message_to_event_canvas_scroll() {
+        let msg = Message::CanvasScroll {
+            id: "c1".into(),
+            cursor_x: 10.0,
+            cursor_y: 20.0,
+            delta_x: 1.0,
+            delta_y: -1.0,
+        };
+        let event = message_to_event(&msg).unwrap();
+        assert_eq!(event.family, "canvas_scroll");
+    }
+
+    #[test]
+    fn message_to_event_extension_event_returns_none() {
+        // Message::Event goes through the extension dispatcher in
+        // update(), not through message_to_event.
         let msg = Message::Event {
             id: "node1".into(),
             data: serde_json::json!({"key": "value"}),
             family: "custom_family".into(),
         };
-        let event = message_to_event(&msg).unwrap();
-        assert_eq!(event.family, "custom_family");
-        assert_eq!(event.id, "node1");
-        assert!(event.data.is_some());
-    }
-
-    #[test]
-    fn message_to_event_generic_null_data() {
-        let msg = Message::Event {
-            id: "node1".into(),
-            data: serde_json::Value::Null,
-            family: "fam".into(),
-        };
-        let event = message_to_event(&msg).unwrap();
-        assert!(event.data.is_none());
+        assert!(message_to_event(&msg).is_none());
     }
 }
