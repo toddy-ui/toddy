@@ -135,7 +135,7 @@ impl App {
     fn keyboard_subscriptions(&self, has_on_event: bool, subs: &mut Vec<Subscription<Message>>) {
         // When on_event is active, its catch-all listener already covers keyboard,
         // mouse, touch, and IME events. Skip specific subscriptions to avoid
-        // duplicate event delivery (M-16).
+        // duplicate event delivery.
         if !has_on_event && self.core.active_subscriptions.contains_key(SUB_KEY_PRESS) {
             subs.push(event::listen_with(|evt, status, _window| {
                 if let iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
@@ -316,26 +316,15 @@ impl App {
     }
 
     fn window_subscriptions(&self, subs: &mut Vec<Subscription<Message>>) {
-        if self
-            .core
-            .active_subscriptions
-            .contains_key(SUB_WINDOW_EVENT)
-            || self.core.active_subscriptions.contains_key(SUB_FILE_DROP)
-            || self.core.active_subscriptions.contains_key(SUB_WINDOW_OPEN)
-            || self
-                .core
-                .active_subscriptions
-                .contains_key(SUB_WINDOW_RESIZE)
-            || self
-                .core
-                .active_subscriptions
-                .contains_key(SUB_WINDOW_FOCUS)
-            || self
-                .core
-                .active_subscriptions
-                .contains_key(SUB_WINDOW_UNFOCUS)
-            || self.core.active_subscriptions.contains_key(SUB_WINDOW_MOVE)
-        {
+        if self.has_any_subscription(&[
+            SUB_WINDOW_EVENT,
+            SUB_WINDOW_OPEN,
+            SUB_WINDOW_MOVE,
+            SUB_WINDOW_RESIZE,
+            SUB_WINDOW_FOCUS,
+            SUB_WINDOW_UNFOCUS,
+            SUB_FILE_DROP,
+        ]) {
             subs.push(window::events().map(|(id, evt)| Message::WindowEvent(id, evt)));
         }
 
@@ -367,5 +356,11 @@ impl App {
         {
             subs.push(system::theme_changes().map(Message::ThemeChanged));
         }
+    }
+
+    /// Check if any of the given subscription keys are registered.
+    fn has_any_subscription(&self, keys: &[&str]) -> bool {
+        keys.iter()
+            .any(|k| self.core.active_subscriptions.contains_key(*k))
     }
 }
