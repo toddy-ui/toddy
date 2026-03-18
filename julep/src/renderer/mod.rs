@@ -7,7 +7,7 @@
 
 mod app;
 mod apply;
-mod constants;
+pub(crate) mod constants;
 mod events;
 mod run;
 mod subscriptions;

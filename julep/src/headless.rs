@@ -449,7 +449,11 @@ fn handle_message(s: &mut Session, msg: IncomingMessage) -> io::Result<()> {
             }
         }
         IncomingMessage::AdvanceFrame { timestamp } => {
-            if let Some(tag) = s.core.active_subscriptions.get("on_animation_frame") {
+            if let Some(tag) = s
+                .core
+                .active_subscriptions
+                .get(crate::renderer::constants::SUB_ANIMATION_FRAME)
+            {
                 crate::scripting::emit_wire(
                     &julep_core::protocol::OutgoingEvent::animation_frame(
                         tag.clone(),
