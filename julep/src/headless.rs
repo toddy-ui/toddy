@@ -1,17 +1,16 @@
-//! Headless mode (`--headless`): Core + wire protocol, no display.
+//! Headless and mock modes for the julep renderer.
 //!
-//! Reads framed messages from stdin, processes them through
-//! [`Core`](julep_core::engine::Core), and writes responses to stdout.
-//! No iced daemon, no windows, no GPU. Useful for CI, integration
-//! testing, and headless screenshot capture via tiny-skia.
+//! `--headless`: real rendering via tiny-skia with persistent widget
+//! state. Accurate screenshots after interactions.
 //!
-//! A persistent [`iced_test::runtime::user_interface::Cache`] is
-//! maintained across the session so that iced widget state (scroll
-//! positions, focus, cursor positions) survives between screenshots
-//! and interactions. The renderer is also created once and reused.
-//! Interactions inject real iced [`Event`]s through
-//! [`UserInterface::update`] so that widget-level state (focus rings,
-//! scroll offsets, text cursors) changes in response to test actions.
+//! `--mock`: protocol-only, no rendering. Stub screenshots. Fast
+//! protocol-level testing from any language.
+//!
+//! Both modes read framed messages from stdin, process them through
+//! [`Core`](julep_core::engine::Core), and write responses to stdout.
+//! No iced daemon, no windows, no GPU. The difference is whether a
+//! persistent iced renderer and UI cache are maintained for real
+//! screenshot capture (`--headless`) or omitted for speed (`--mock`).
 
 use std::io::{self, BufRead};
 
@@ -41,31 +40,53 @@ const MAX_SCREENSHOT_DIMENSION: u32 = 16384;
 
 type UiCache = iced_test::runtime::user_interface::Cache;
 
-/// All mutable state for a headless session.
-///
-/// Holds a persistent iced renderer and UI cache so that widget state
-/// (scroll positions, focus, cursor positions) survives across messages.
-struct Session {
-    core: Core,
-    theme: Theme,
-    dispatcher: ExtensionDispatcher,
-    ext_caches: ExtensionCaches,
-    images: ImageRegistry,
+/// Persistent iced renderer and UI cache. Present in `--headless`
+/// mode, absent in `--mock` mode.
+struct UiState {
     renderer: iced::Renderer,
     ui_cache: UiCache,
     viewport_size: Size,
     cursor: mouse::Cursor,
 }
 
+/// All mutable state for a headless/mock session.
+///
+/// When `ui` is `Some`, the session maintains a persistent iced
+/// renderer and UI cache for real screenshot capture and widget state
+/// tracking. When `None` (mock mode), rendering is skipped entirely.
+struct Session {
+    core: Core,
+    theme: Theme,
+    dispatcher: ExtensionDispatcher,
+    ext_caches: ExtensionCaches,
+    images: ImageRegistry,
+    /// None in --mock mode (no rendering).
+    ui: Option<UiState>,
+}
+
 impl Session {
-    fn new(dispatcher: ExtensionDispatcher) -> Self {
-        let renderer_settings = iced::advanced::renderer::Settings {
-            default_font: iced::Font::DEFAULT,
-            default_text_size: iced::Pixels(16.0),
+    fn new(dispatcher: ExtensionDispatcher, rendering: bool) -> Self {
+        let ui = if rendering {
+            let renderer_settings = iced::advanced::renderer::Settings {
+                default_font: iced::Font::DEFAULT,
+                default_text_size: iced::Pixels(16.0),
+            };
+            let renderer =
+                iced::futures::executor::block_on(iced::Renderer::new(renderer_settings, None))
+                    .expect("headless renderer must be available (tiny-skia backend)");
+
+            Some(UiState {
+                renderer,
+                ui_cache: UiCache::default(),
+                viewport_size: Size::new(
+                    DEFAULT_SCREENSHOT_WIDTH as f32,
+                    DEFAULT_SCREENSHOT_HEIGHT as f32,
+                ),
+                cursor: mouse::Cursor::Unavailable,
+            })
+        } else {
+            None
         };
-        let renderer =
-            iced::futures::executor::block_on(iced::Renderer::new(renderer_settings, None))
-                .expect("headless renderer must be available (tiny-skia backend)");
 
         Self {
             core: Core::new(),
@@ -73,18 +94,15 @@ impl Session {
             dispatcher,
             ext_caches: ExtensionCaches::new(),
             images: ImageRegistry::new(),
-            renderer,
-            ui_cache: UiCache::default(),
-            viewport_size: Size::new(
-                DEFAULT_SCREENSHOT_WIDTH as f32,
-                DEFAULT_SCREENSHOT_HEIGHT as f32,
-            ),
-            cursor: mouse::Cursor::Unavailable,
+            ui,
         }
     }
 
     /// Rebuild the renderer when default font/text size changes.
     fn rebuild_renderer(&mut self) {
+        let Some(ui_state) = &mut self.ui else {
+            return;
+        };
         let renderer_settings = iced::advanced::renderer::Settings {
             default_font: self.core.default_font.unwrap_or(iced::Font::DEFAULT),
             default_text_size: iced::Pixels(self.core.default_text_size.unwrap_or(16.0)),
@@ -92,16 +110,17 @@ impl Session {
         if let Some(r) =
             iced::futures::executor::block_on(iced::Renderer::new(renderer_settings, None))
         {
-            self.renderer = r;
+            ui_state.renderer = r;
             // The renderer changed, so the old cache is invalid.
-            self.ui_cache = UiCache::default();
+            ui_state.ui_cache = UiCache::default();
         }
     }
 
     /// Build a temporary UserInterface from the current tree, run a
     /// closure against it, then store the resulting cache back.
     ///
-    /// Returns `None` if the tree is empty (no root node).
+    /// Returns `None` if the tree is empty (no root node) or if
+    /// rendering is disabled (mock mode).
     fn with_ui<R>(
         &mut self,
         f: impl FnOnce(
@@ -115,6 +134,7 @@ impl Session {
             mouse::Cursor,
         ) -> R,
     ) -> Option<R> {
+        let ui_state = self.ui.as_mut()?;
         let root = self.core.tree.root()?;
 
         julep_core::widgets::ensure_caches(root, &mut self.core.caches);
@@ -128,44 +148,50 @@ impl Session {
         };
         let element = julep_core::widgets::render(root, ctx);
 
-        let cache = std::mem::take(&mut self.ui_cache);
+        let cache = std::mem::take(&mut ui_state.ui_cache);
         let mut ui = iced_test::runtime::UserInterface::build(
             element,
-            self.viewport_size,
+            ui_state.viewport_size,
             cache,
-            &mut self.renderer,
+            &mut ui_state.renderer,
         );
 
-        let result = f(&mut ui, &mut self.renderer, self.cursor);
+        let result = f(&mut ui, &mut ui_state.renderer, ui_state.cursor);
 
-        self.ui_cache = ui.into_cache();
+        ui_state.ui_cache = ui.into_cache();
         Some(result)
     }
 
     /// Process a RedrawRequested event through the UI after a tree change.
     /// This lets iced widgets settle their internal state (layout, etc.).
+    /// No-op in mock mode.
     fn settle_ui(&mut self) {
-        self.with_ui(|ui, renderer, cursor| {
-            let mut messages = Vec::new();
-            let redraw = Event::Window(iced::window::Event::RedrawRequested(
-                iced_test::core::time::Instant::now(),
-            ));
-            let _status = ui.update(&[redraw], cursor, renderer, &mut messages);
-            // Messages are discarded -- julep manages state through the
-            // wire protocol, not through iced's message loop.
-        });
+        if self.ui.is_some() {
+            self.with_ui(|ui, renderer, cursor| {
+                let mut messages = Vec::new();
+                let redraw = Event::Window(iced::window::Event::RedrawRequested(
+                    iced_test::core::time::Instant::now(),
+                ));
+                let _status = ui.update(&[redraw], cursor, renderer, &mut messages);
+                // Messages are discarded -- julep manages state through the
+                // wire protocol, not through iced's message loop.
+            });
+        }
     }
 
     /// Inject a sequence of iced events into the persistent UI.
+    /// No-op in mock mode.
     fn inject_events(&mut self, events: &[Event]) {
-        if events.is_empty() {
+        if self.ui.is_none() || events.is_empty() {
             return;
         }
         // Update cursor from any CursorMoved events before building the UI
         // so the cursor position is current when the UI processes the events.
-        for event in events {
-            if let Event::Mouse(mouse::Event::CursorMoved { position }) = event {
-                self.cursor = mouse::Cursor::Available(*position);
+        if let Some(ui_state) = &mut self.ui {
+            for event in events {
+                if let Event::Mouse(mouse::Event::CursorMoved { position }) = event {
+                    ui_state.cursor = mouse::Cursor::Available(*position);
+                }
             }
         }
         self.with_ui(|ui, renderer, cursor| {
@@ -385,14 +411,18 @@ pub(crate) fn interaction_to_iced_events(
 // Event loop
 // ---------------------------------------------------------------------------
 
-/// Run the headless event loop.
+/// Run the headless/mock event loop.
 ///
-/// A persistent iced renderer and UI cache are maintained across the
-/// session. Interactions inject real iced events so widget state (scroll
-/// positions, focus, text cursors) persists. Screenshots capture the
-/// accumulated widget state.
-pub fn run(forced_codec: Option<Codec>, dispatcher: ExtensionDispatcher) {
-    let mut session = Session::new(dispatcher);
+/// When `rendering` is true (headless mode), a persistent iced renderer
+/// and UI cache are maintained. Interactions inject real iced events so
+/// widget state (scroll positions, focus, text cursors) persists.
+/// Screenshots capture the accumulated widget state.
+///
+/// When `rendering` is false (mock mode), no renderer is created.
+/// Screenshots return empty stubs. This is the fastest option for
+/// protocol-level testing.
+pub fn run(forced_codec: Option<Codec>, dispatcher: ExtensionDispatcher, rendering: bool) {
+    let mut session = Session::new(dispatcher, rendering);
     let stdin = io::stdin();
     let mut reader = io::BufReader::new(stdin.lock());
 
@@ -470,8 +500,9 @@ fn handle_message(s: &mut Session, msg: IncomingMessage) {
                         effect_type,
                         ..
                     } => {
+                        let mode = if s.ui.is_some() { "headless" } else { "mock" };
                         log::debug!(
-                            "headless: async effect {effect_type} returning cancelled \
+                            "{mode}: async effect {effect_type} returning cancelled \
                              (no display)"
                         );
                         crate::scripting::emit_wire(&julep_core::protocol::EffectResponse::error(
@@ -490,15 +521,16 @@ fn handle_message(s: &mut Session, msg: IncomingMessage) {
                         width,
                         height,
                     } => {
+                        let mode = if s.ui.is_some() { "headless" } else { "mock" };
                         if let Err(e) = s.images.apply_op(&op, &handle, data, pixels, width, height)
                         {
-                            log::warn!("headless: image_op {op} failed: {e}");
+                            log::warn!("{mode}: image_op {op} failed: {e}");
                         }
                     }
                     CoreEffect::ExtensionConfig(config) => {
                         s.dispatcher.init_all(&config);
                     }
-                    // No-ops in headless (no windows, no iced widget tree).
+                    // No-ops in headless/mock (no windows, no iced widget tree).
                     CoreEffect::SyncWindows => {}
                     CoreEffect::WidgetOp { .. } => {}
                     CoreEffect::WindowOp { .. } => {}
@@ -542,9 +574,14 @@ fn handle_message(s: &mut Session, msg: IncomingMessage) {
             let widget_id = resolve_widget_id(&s.core, &selector);
 
             // Inject real iced events into the persistent UI so widget
-            // state (focus, scroll, cursor) updates.
+            // state (focus, scroll, cursor) updates. No-op in mock mode
+            // (inject_events returns early when ui is None).
+            let cursor =
+                s.ui.as_ref()
+                    .map(|u| u.cursor)
+                    .unwrap_or(mouse::Cursor::Unavailable);
             let iced_events =
-                interaction_to_iced_events(&action, widget_id.as_deref(), &payload, s.cursor);
+                interaction_to_iced_events(&action, widget_id.as_deref(), &payload, cursor);
             if !iced_events.is_empty() {
                 s.inject_events(&iced_events);
             }
@@ -573,8 +610,10 @@ fn handle_message(s: &mut Session, msg: IncomingMessage) {
             s.dispatcher.reset(&mut s.ext_caches);
             s.images = ImageRegistry::new();
             s.theme = Theme::Dark;
-            s.ui_cache = UiCache::default();
-            s.cursor = mouse::Cursor::Unavailable;
+            if let Some(ui_state) = &mut s.ui {
+                ui_state.ui_cache = UiCache::default();
+                ui_state.cursor = mouse::Cursor::Unavailable;
+            }
             s.rebuild_renderer();
             crate::scripting::handle_reset(&mut s.core, id);
         }
@@ -643,15 +682,23 @@ use crate::scripting::{find_id_by_label, find_id_by_role, find_id_by_text, find_
 
 /// Handle a ScreenshotCapture message.
 ///
-/// Uses the persistent renderer and UI cache to produce real RGBA pixel
-/// data via tiny-skia. The screenshot reflects accumulated widget state
-/// (scroll positions, focus, etc.) from prior interactions.
+/// In headless mode, uses the persistent renderer and UI cache to
+/// produce real RGBA pixel data via tiny-skia. In mock mode, returns
+/// an empty stub.
 fn handle_screenshot_capture(s: &mut Session, id: String, name: String, width: u32, height: u32) {
+    if s.ui.is_none() {
+        // Mock mode: stub screenshot.
+        crate::renderer::emitters::emit_screenshot_response(&id, &name, "", 0, 0, &[]);
+        return;
+    }
+
     use iced_test::core::theme::Base;
     use sha2::{Digest, Sha256};
 
+    let ui_state = s.ui.as_mut().unwrap();
+
     // Update viewport size for this screenshot.
-    s.viewport_size = Size::new(width as f32, height as f32);
+    ui_state.viewport_size = Size::new(width as f32, height as f32);
 
     let root = match s.core.tree.root() {
         Some(r) => r,
@@ -675,35 +722,42 @@ fn handle_screenshot_capture(s: &mut Session, id: String, name: String, width: u
         julep_core::widgets::render(root, ctx);
 
     // Build UI with the persistent cache.
-    let cache = std::mem::take(&mut s.ui_cache);
-    let mut ui =
-        iced_test::runtime::UserInterface::build(element, s.viewport_size, cache, &mut s.renderer);
+    let cache = std::mem::take(&mut ui_state.ui_cache);
+    let mut ui = iced_test::runtime::UserInterface::build(
+        element,
+        ui_state.viewport_size,
+        cache,
+        &mut ui_state.renderer,
+    );
 
     // Process a RedrawRequested so widgets can update their visual state.
     {
+        let cursor = ui_state.cursor;
         let mut messages = Vec::new();
         let redraw = Event::Window(iced::window::Event::RedrawRequested(
             iced_test::core::time::Instant::now(),
         ));
-        let _status = ui.update(&[redraw], s.cursor, &mut s.renderer, &mut messages);
+        let _status = ui.update(&[redraw], cursor, &mut ui_state.renderer, &mut messages);
     }
 
     let base = s.theme.base();
     ui.draw(
-        &mut s.renderer,
+        &mut ui_state.renderer,
         &s.theme,
         &iced_test::core::renderer::Style {
             text_color: base.text_color,
         },
-        s.cursor,
+        ui_state.cursor,
     );
 
     // Store cache before taking the screenshot (screenshot doesn't
     // need the UI, just the renderer).
-    s.ui_cache = ui.into_cache();
+    ui_state.ui_cache = ui.into_cache();
 
     let phys_size = iced::Size::new(width, height);
-    let rgba = s.renderer.screenshot(phys_size, 1.0, base.background_color);
+    let rgba = ui_state
+        .renderer
+        .screenshot(phys_size, 1.0, base.background_color);
 
     let hash = {
         let mut hasher = Sha256::new();

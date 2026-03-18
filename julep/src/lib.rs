@@ -21,7 +21,6 @@
 #![deny(warnings)]
 
 mod headless;
-mod mock;
 mod scripting;
 
 mod renderer;

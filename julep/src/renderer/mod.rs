@@ -1612,11 +1612,11 @@ pub(crate) fn run(builder: julep_core::app::JulepAppBuilder) -> iced::Result {
 
     {
         if args.contains(&"--mock".to_string()) {
-            crate::mock::run(forced_codec, builder.build_dispatcher());
+            crate::headless::run(forced_codec, builder.build_dispatcher(), false);
             return Ok(());
         }
         if args.contains(&"--headless".to_string()) {
-            crate::headless::run(forced_codec, builder.build_dispatcher());
+            crate::headless::run(forced_codec, builder.build_dispatcher(), true);
             return Ok(());
         }
     }
