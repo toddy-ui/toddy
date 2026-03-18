@@ -24,9 +24,7 @@ use julep_core::extensions::{ExtensionCaches, ExtensionDispatcher, RenderCtx};
 use julep_core::image_registry::ImageRegistry;
 use julep_core::protocol::IncomingMessage;
 
-use serde_json::Value;
-
-use crate::scripting::interaction_to_iced_events;
+use crate::scripting::{interaction_to_iced_events, resolve_widget_id};
 
 /// Default screenshot width when not specified by the caller.
 const DEFAULT_SCREENSHOT_WIDTH: u32 = 1024;
@@ -452,33 +450,6 @@ fn handle_message(s: &mut Session, msg: IncomingMessage) {
         }
     }
 }
-
-/// Resolve a widget ID from a selector, without emitting anything.
-fn resolve_widget_id(core: &Core, selector: &Value) -> Option<String> {
-    use crate::scripting::Selector;
-    use crate::scripting::parse_selector;
-
-    match parse_selector(selector)? {
-        Selector::Id(wid) => Some(wid),
-        Selector::Text(text) => core
-            .tree
-            .root()
-            .and_then(|root| find_id_by_text(root, &text, 0)),
-        Selector::Role(role) => core
-            .tree
-            .root()
-            .and_then(|root| find_id_by_role(root, &role, 0)),
-        Selector::Label(label) => core
-            .tree
-            .root()
-            .and_then(|root| find_id_by_label(root, &label, 0)),
-        Selector::Focused => core.tree.root().and_then(|root| find_id_focused(root, 0)),
-    }
-}
-
-// Re-use the search helpers from scripting. They're pub, just
-// not exported from the crate. Import them by full path.
-use crate::scripting::{find_id_by_label, find_id_by_role, find_id_by_text, find_id_focused};
 
 /// Handle a ScreenshotCapture message.
 ///

@@ -1,14 +1,14 @@
-// scripting.rs -- Protocol helpers for scripting messages.
-//
-// Both the daemon and headless modes handle Query/Interact/Reset/SnapshotCapture
-// messages from stdin. The logic is identical; only the surrounding event loop
-// differs. This module contains the canonical implementations so the two modes
-// stay in sync.
-//
-// Event construction functions (parse_iced_key, parse_iced_modifiers,
-// make_key_pressed, make_key_released, interaction_to_iced_events) also live
-// here. Both the daemon renderer and headless mode use them to translate
-// scripting protocol interactions into iced events.
+//! Protocol helpers for scripting messages.
+//!
+//! Both the daemon and headless modes handle Query/Interact/Reset/SnapshotCapture
+//! messages from stdin. The logic is identical; only the surrounding event loop
+//! differs. This module contains the canonical implementations so the two modes
+//! stay in sync.
+//!
+//! Event construction functions (`parse_iced_key`, `parse_iced_modifiers`,
+//! `make_key_pressed`, `make_key_released`, `interaction_to_iced_events`) also
+//! live here. Both the daemon renderer and headless mode use them to translate
+//! scripting protocol interactions into iced events.
 
 use std::io::{self, Write};
 
@@ -32,7 +32,7 @@ const MAX_SEARCH_DEPTH: usize = 256;
 // ---------------------------------------------------------------------------
 
 #[derive(Debug)]
-pub enum Selector {
+pub(crate) enum Selector {
     Id(String),
     Text(String),
     Role(String),
@@ -40,7 +40,7 @@ pub enum Selector {
     Focused,
 }
 
-pub fn parse_selector(selector: &Value) -> Option<Selector> {
+pub(crate) fn parse_selector(selector: &Value) -> Option<Selector> {
     let by = selector.get("by")?.as_str()?;
     match by {
         "focused" => Some(Selector::Focused),
@@ -67,7 +67,7 @@ pub fn parse_selector(selector: &Value) -> Option<Selector> {
 /// 1. Explicit modifiers map: `{"key": "s", "modifiers": {"ctrl": true, ...}}`
 /// 2. Combined key string: `{"key": "ctrl+s"}` -- splits on `+` and extracts
 ///    modifier prefixes (ctrl/command, shift, alt, logo/super/meta).
-pub fn parse_key_and_modifiers(
+pub(crate) fn parse_key_and_modifiers(
     payload: Option<&serde_json::Map<String, Value>>,
 ) -> (String, Value) {
     let empty_map = serde_json::Map::new();
@@ -327,7 +327,7 @@ pub(crate) fn interaction_to_iced_events(
 // ---------------------------------------------------------------------------
 
 /// Write a serialized response to stdout using the negotiated wire codec.
-pub fn emit_wire<T: serde::Serialize>(value: &T) {
+pub(crate) fn emit_wire<T: serde::Serialize>(value: &T) {
     let codec = Codec::get_global();
     match codec.encode(value) {
         Ok(bytes) => {
@@ -357,232 +357,146 @@ pub fn emit_wire<T: serde::Serialize>(value: &T) {
 // Tree search helpers
 // ---------------------------------------------------------------------------
 
-pub fn find_node_by_id(core: &Core, widget_id: &str) -> Value {
-    match core.tree.root() {
-        Some(root) => search_by_id(root, widget_id, 0).unwrap_or(Value::Null),
-        None => Value::Null,
-    }
-}
-
-pub fn find_node_by_text(core: &Core, text: &str) -> Value {
-    match core.tree.root() {
-        Some(root) => search_by_text(root, text, 0).unwrap_or(Value::Null),
-        None => Value::Null,
-    }
-}
-
-fn search_by_id(node: &TreeNode, id: &str, depth: usize) -> Option<Value> {
+/// Walk the tree depth-first, returning the first node matching the predicate.
+/// `extract` converts the matching node to the desired return type.
+fn search_tree<R>(
+    node: &TreeNode,
+    depth: usize,
+    predicate: &dyn Fn(&TreeNode) -> bool,
+    extract: &dyn Fn(&TreeNode) -> R,
+) -> Option<R> {
     if depth > MAX_SEARCH_DEPTH {
         return None;
     }
-    if node.id == id {
-        return serde_json::to_value(node).ok();
+    if predicate(node) {
+        return Some(extract(node));
     }
     for child in &node.children {
-        if let Some(found) = search_by_id(child, id, depth + 1) {
+        if let Some(found) = search_tree(child, depth + 1, predicate, extract) {
             return Some(found);
         }
     }
     None
 }
 
-pub fn find_node_by_role(core: &Core, role: &str) -> Value {
-    match core.tree.root() {
-        Some(root) => search_by_role(root, role, 0).unwrap_or(Value::Null),
-        None => Value::Null,
-    }
+// -- Extractors -------------------------------------------------------------
+
+fn node_to_value(node: &TreeNode) -> Value {
+    serde_json::to_value(node).unwrap_or(Value::Null)
 }
 
-pub fn find_node_by_label(core: &Core, label: &str) -> Value {
-    match core.tree.root() {
-        Some(root) => search_by_label(root, label, 0).unwrap_or(Value::Null),
-        None => Value::Null,
-    }
+fn node_id(node: &TreeNode) -> String {
+    node.id.clone()
 }
 
-pub fn find_focused_node(core: &Core) -> Value {
-    match core.tree.root() {
-        Some(root) => search_focused(root, 0).unwrap_or(Value::Null),
-        None => Value::Null,
-    }
-}
+// -- Predicates -------------------------------------------------------------
 
-fn search_by_role(node: &TreeNode, role: &str, depth: usize) -> Option<Value> {
-    if depth > MAX_SEARCH_DEPTH {
-        return None;
-    }
-    // Check explicit a11y.role prop first. When present it takes priority
-    // over type_name -- the host explicitly overrode the semantic role.
+/// Match by explicit `a11y.role`, falling back to `type_name` only when no
+/// `a11y` prop is present at all.
+fn matches_role(node: &TreeNode, role: &str) -> bool {
     if let Some(a11y) = node.props.get("a11y") {
-        if let Some(node_role) = a11y.get("role").and_then(|v| v.as_str())
-            && node_role == role
-        {
-            return serde_json::to_value(node).ok();
-        }
-        // Explicit a11y present -- don't fall through to type_name.
-    } else if node.type_name == role {
-        // No explicit a11y role -- fall back to widget type_name.
-        return serde_json::to_value(node).ok();
+        a11y.get("role").and_then(|v| v.as_str()) == Some(role)
+    } else {
+        node.type_name == role
     }
-    for child in &node.children {
-        if let Some(found) = search_by_role(child, role, depth + 1) {
-            return Some(found);
-        }
-    }
-    None
 }
 
-fn search_by_label(node: &TreeNode, label: &str, depth: usize) -> Option<Value> {
-    if depth > MAX_SEARCH_DEPTH {
-        return None;
-    }
-    // Check explicit a11y.label prop
+/// Match by explicit `a11y.label`, falling back to `label` and `content` props.
+fn matches_label(node: &TreeNode, label: &str) -> bool {
     if let Some(a11y) = node.props.get("a11y")
         && let Some(node_label) = a11y.get("label").and_then(|v| v.as_str())
         && node_label == label
     {
-        return serde_json::to_value(node).ok();
+        return true;
     }
-    // Also check common text props that serve as implicit labels
     for key in &["label", "content"] {
         if let Some(val) = node.props.get(*key)
             && val.as_str() == Some(label)
         {
-            return serde_json::to_value(node).ok();
+            return true;
         }
     }
-    for child in &node.children {
-        if let Some(found) = search_by_label(child, label, depth + 1) {
-            return Some(found);
-        }
-    }
-    None
+    false
 }
 
-fn search_focused(node: &TreeNode, depth: usize) -> Option<Value> {
-    if depth > MAX_SEARCH_DEPTH {
-        return None;
-    }
-    // Check if node has a focused prop or a11y.focused
-    if node.props.get("focused").and_then(|v| v.as_bool()) == Some(true) {
-        return serde_json::to_value(node).ok();
-    }
-    if let Some(a11y) = node.props.get("a11y")
-        && a11y.get("focused").and_then(|v| v.as_bool()) == Some(true)
-    {
-        return serde_json::to_value(node).ok();
-    }
-    for child in &node.children {
-        if let Some(found) = search_focused(child, depth + 1) {
-            return Some(found);
-        }
-    }
-    None
-}
-
-fn search_by_text(node: &TreeNode, text: &str, depth: usize) -> Option<Value> {
-    if depth > MAX_SEARCH_DEPTH {
-        return None;
-    }
+/// Match against text content in `content`, `label`, `value`, and `placeholder` props.
+fn matches_text(node: &TreeNode, text: &str) -> bool {
     for key in &["content", "label", "value", "placeholder"] {
         if let Some(val) = node.props.get(*key)
             && val.as_str() == Some(text)
         {
-            return serde_json::to_value(node).ok();
+            return true;
         }
     }
-    for child in &node.children {
-        if let Some(found) = search_by_text(child, text, depth + 1) {
-            return Some(found);
-        }
+    false
+}
+
+/// Match nodes with `props.focused == true` or `a11y.focused == true`.
+fn is_focused(node: &TreeNode) -> bool {
+    if node.props.get("focused").and_then(|v| v.as_bool()) == Some(true) {
+        return true;
     }
-    None
+    if let Some(a11y) = node.props.get("a11y")
+        && a11y.get("focused").and_then(|v| v.as_bool()) == Some(true)
+    {
+        return true;
+    }
+    false
+}
+
+// -- Public API (node as Value) ---------------------------------------------
+
+pub(crate) fn find_node_by_id(core: &Core, widget_id: &str) -> Value {
+    core.tree
+        .root()
+        .and_then(|root| search_tree(root, 0, &|n| n.id == widget_id, &node_to_value))
+        .unwrap_or(Value::Null)
+}
+
+pub(crate) fn find_node_by_text(core: &Core, text: &str) -> Value {
+    core.tree
+        .root()
+        .and_then(|root| search_tree(root, 0, &|n| matches_text(n, text), &node_to_value))
+        .unwrap_or(Value::Null)
+}
+
+pub(crate) fn find_node_by_role(core: &Core, role: &str) -> Value {
+    core.tree
+        .root()
+        .and_then(|root| search_tree(root, 0, &|n| matches_role(n, role), &node_to_value))
+        .unwrap_or(Value::Null)
+}
+
+pub(crate) fn find_node_by_label(core: &Core, label: &str) -> Value {
+    core.tree
+        .root()
+        .and_then(|root| search_tree(root, 0, &|n| matches_label(n, label), &node_to_value))
+        .unwrap_or(Value::Null)
+}
+
+pub(crate) fn find_focused_node(core: &Core) -> Value {
+    core.tree
+        .root()
+        .and_then(|root| search_tree(root, 0, &is_focused, &node_to_value))
+        .unwrap_or(Value::Null)
+}
+
+// -- Public API (ID only) ---------------------------------------------------
+
+pub(crate) fn find_id_by_text(node: &TreeNode, text: &str, depth: usize) -> Option<String> {
+    search_tree(node, depth, &|n| matches_text(n, text), &node_id)
 }
 
 pub(crate) fn find_id_by_role(node: &TreeNode, role: &str, depth: usize) -> Option<String> {
-    if depth > MAX_SEARCH_DEPTH {
-        return None;
-    }
-    if let Some(a11y) = node.props.get("a11y") {
-        if let Some(node_role) = a11y.get("role").and_then(|v| v.as_str())
-            && node_role == role
-        {
-            return Some(node.id.clone());
-        }
-        // Explicit a11y present -- skip type_name fallback.
-    } else if node.type_name == role {
-        return Some(node.id.clone());
-    }
-    for child in &node.children {
-        if let Some(found) = find_id_by_role(child, role, depth + 1) {
-            return Some(found);
-        }
-    }
-    None
+    search_tree(node, depth, &|n| matches_role(n, role), &node_id)
 }
 
 pub(crate) fn find_id_by_label(node: &TreeNode, label: &str, depth: usize) -> Option<String> {
-    if depth > MAX_SEARCH_DEPTH {
-        return None;
-    }
-    if let Some(a11y) = node.props.get("a11y")
-        && let Some(node_label) = a11y.get("label").and_then(|v| v.as_str())
-        && node_label == label
-    {
-        return Some(node.id.clone());
-    }
-    for key in &["label", "content"] {
-        if let Some(val) = node.props.get(*key)
-            && val.as_str() == Some(label)
-        {
-            return Some(node.id.clone());
-        }
-    }
-    for child in &node.children {
-        if let Some(found) = find_id_by_label(child, label, depth + 1) {
-            return Some(found);
-        }
-    }
-    None
+    search_tree(node, depth, &|n| matches_label(n, label), &node_id)
 }
 
 pub(crate) fn find_id_focused(node: &TreeNode, depth: usize) -> Option<String> {
-    if depth > MAX_SEARCH_DEPTH {
-        return None;
-    }
-    if node.props.get("focused").and_then(|v| v.as_bool()) == Some(true) {
-        return Some(node.id.clone());
-    }
-    if let Some(a11y) = node.props.get("a11y")
-        && a11y.get("focused").and_then(|v| v.as_bool()) == Some(true)
-    {
-        return Some(node.id.clone());
-    }
-    for child in &node.children {
-        if let Some(found) = find_id_focused(child, depth + 1) {
-            return Some(found);
-        }
-    }
-    None
-}
-
-pub(crate) fn find_id_by_text(node: &TreeNode, text: &str, depth: usize) -> Option<String> {
-    if depth > MAX_SEARCH_DEPTH {
-        return None;
-    }
-    for key in &["content", "label", "value", "placeholder"] {
-        if let Some(val) = node.props.get(*key)
-            && val.as_str() == Some(text)
-        {
-            return Some(node.id.clone());
-        }
-    }
-    for child in &node.children {
-        if let Some(found) = find_id_by_text(child, text, depth + 1) {
-            return Some(found);
-        }
-    }
-    None
+    search_tree(node, depth, &is_focused, &node_id)
 }
 
 // ---------------------------------------------------------------------------
@@ -590,7 +504,7 @@ pub(crate) fn find_id_by_text(node: &TreeNode, text: &str, depth: usize) -> Opti
 // ---------------------------------------------------------------------------
 
 /// Handle a Query message: serialize tree or find a widget by selector.
-pub fn handle_query(core: &Core, id: String, target: String, selector: Value) {
+pub(crate) fn handle_query(core: &Core, id: String, target: String, selector: Value) {
     let data = match target.as_str() {
         "tree" => match core.tree.root() {
             Some(root) => serde_json::to_value(root).unwrap_or(Value::Null),
@@ -613,26 +527,36 @@ pub fn handle_query(core: &Core, id: String, target: String, selector: Value) {
     emit_wire(&QueryResponse::new(id, target, data));
 }
 
-/// Handle an Interact message: resolve widget ID from selector, build
-/// synthetic events for the requested action.
-pub fn handle_interact(core: &Core, id: String, action: String, selector: Value, payload: Value) {
-    let widget_id = match parse_selector(&selector) {
-        Some(Selector::Id(wid)) => Some(wid),
-        Some(Selector::Text(text)) => core
+/// Resolve a selector to a widget ID without emitting anything.
+pub(crate) fn resolve_widget_id(core: &Core, selector: &Value) -> Option<String> {
+    match parse_selector(selector)? {
+        Selector::Id(wid) => Some(wid),
+        Selector::Text(text) => core
             .tree
             .root()
             .and_then(|root| find_id_by_text(root, &text, 0)),
-        Some(Selector::Role(role)) => core
+        Selector::Role(role) => core
             .tree
             .root()
             .and_then(|root| find_id_by_role(root, &role, 0)),
-        Some(Selector::Label(label)) => core
+        Selector::Label(label) => core
             .tree
             .root()
             .and_then(|root| find_id_by_label(root, &label, 0)),
-        Some(Selector::Focused) => core.tree.root().and_then(|root| find_id_focused(root, 0)),
-        None => None,
-    };
+        Selector::Focused => core.tree.root().and_then(|root| find_id_focused(root, 0)),
+    }
+}
+
+/// Handle an Interact message: resolve widget ID from selector, build
+/// synthetic events for the requested action.
+pub(crate) fn handle_interact(
+    core: &Core,
+    id: String,
+    action: String,
+    selector: Value,
+    payload: Value,
+) {
+    let widget_id = resolve_widget_id(core, &selector);
 
     let events = match (action.as_str(), widget_id) {
         ("click", Some(wid)) => {
@@ -749,13 +673,13 @@ pub fn handle_interact(core: &Core, id: String, action: String, selector: Value,
 }
 
 /// Reset core to a blank state and emit the response.
-pub fn handle_reset(core: &mut Core, id: String) {
+pub(crate) fn handle_reset(core: &mut Core, id: String) {
     *core = Core::new();
     emit_wire(&ResetResponse::ok(id));
 }
 
 /// Hash the current tree and emit a SnapshotCaptureResponse.
-pub fn handle_snapshot_capture(core: &Core, id: String, name: String) {
+pub(crate) fn handle_snapshot_capture(core: &Core, id: String, name: String) {
     use julep_core::protocol::SnapshotCaptureResponse;
     use sha2::{Digest, Sha256};
 
@@ -879,7 +803,7 @@ mod tests {
     #[test]
     fn search_by_id_finds_root() {
         let root = make_node("root", "column");
-        let result = search_by_id(&root, "root", 0);
+        let result = search_tree(&root, 0, &|n| n.id == "root", &node_to_value);
         assert!(result.is_some());
         assert_eq!(result.unwrap()["id"], "root");
     }
@@ -888,7 +812,7 @@ mod tests {
     fn search_by_id_finds_child() {
         let mut root = make_node("root", "column");
         root.children.push(make_node("child", "button"));
-        let result = search_by_id(&root, "child", 0);
+        let result = search_tree(&root, 0, &|n| n.id == "child", &node_to_value);
         assert!(result.is_some());
         assert_eq!(result.unwrap()["id"], "child");
     }
@@ -896,14 +820,19 @@ mod tests {
     #[test]
     fn search_by_id_not_found() {
         let root = make_node("root", "column");
-        assert!(search_by_id(&root, "missing", 0).is_none());
+        assert!(search_tree(&root, 0, &|n| n.id == "missing", &node_to_value).is_none());
     }
 
     #[test]
     fn search_by_text_finds_node() {
         let mut root = make_node("root", "column");
         root.children.push(make_text_node("lbl", "Hello World"));
-        let result = search_by_text(&root, "Hello World", 0);
+        let result = search_tree(
+            &root,
+            0,
+            &|n| matches_text(n, "Hello World"),
+            &node_to_value,
+        );
         assert!(result.is_some());
         assert_eq!(result.unwrap()["id"], "lbl");
     }
@@ -911,7 +840,7 @@ mod tests {
     #[test]
     fn search_by_text_not_found() {
         let root = make_text_node("lbl", "Hello");
-        assert!(search_by_text(&root, "Goodbye", 0).is_none());
+        assert!(search_tree(&root, 0, &|n| matches_text(n, "Goodbye"), &node_to_value).is_none());
     }
 
     #[test]
@@ -1181,7 +1110,7 @@ mod tests {
     #[test]
     fn search_by_role_matches_a11y_prop() {
         let node = make_a11y_node("btn", "container", json!({"role": "button"}));
-        let result = search_by_role(&node, "button", 0);
+        let result = search_tree(&node, 0, &|n| matches_role(n, "button"), &node_to_value);
         assert!(result.is_some());
         assert_eq!(result.unwrap()["id"], "btn");
     }
@@ -1189,7 +1118,7 @@ mod tests {
     #[test]
     fn search_by_role_matches_type_name() {
         let node = make_node("btn", "button");
-        let result = search_by_role(&node, "button", 0);
+        let result = search_tree(&node, 0, &|n| matches_role(n, "button"), &node_to_value);
         assert!(result.is_some());
         assert_eq!(result.unwrap()["id"], "btn");
     }
@@ -1198,8 +1127,8 @@ mod tests {
     fn search_by_role_prefers_a11y_over_type() {
         // a11y role "heading" on a "container" type -- should match "heading", not "container"
         let node = make_a11y_node("h1", "container", json!({"role": "heading"}));
-        assert!(search_by_role(&node, "heading", 0).is_some());
-        assert!(search_by_role(&node, "container", 0).is_none());
+        assert!(search_tree(&node, 0, &|n| matches_role(n, "heading"), &node_to_value).is_some());
+        assert!(search_tree(&node, 0, &|n| matches_role(n, "container"), &node_to_value).is_none());
     }
 
     #[test]
@@ -1210,7 +1139,7 @@ mod tests {
             "slider",
             json!({"role": "slider"}),
         ));
-        let result = search_by_role(&root, "slider", 0);
+        let result = search_tree(&root, 0, &|n| matches_role(n, "slider"), &node_to_value);
         assert!(result.is_some());
         assert_eq!(result.unwrap()["id"], "slider");
     }
@@ -1218,7 +1147,7 @@ mod tests {
     #[test]
     fn search_by_role_not_found() {
         let node = make_node("root", "column");
-        assert!(search_by_role(&node, "button", 0).is_none());
+        assert!(search_tree(&node, 0, &|n| matches_role(n, "button"), &node_to_value).is_none());
     }
 
     // -- search_by_label --
@@ -1226,7 +1155,7 @@ mod tests {
     #[test]
     fn search_by_label_matches_a11y_label() {
         let node = make_a11y_node("btn", "button", json!({"label": "Submit"}));
-        let result = search_by_label(&node, "Submit", 0);
+        let result = search_tree(&node, 0, &|n| matches_label(n, "Submit"), &node_to_value);
         assert!(result.is_some());
         assert_eq!(result.unwrap()["id"], "btn");
     }
@@ -1235,7 +1164,12 @@ mod tests {
     fn search_by_label_matches_label_prop() {
         let mut node = make_node("chk", "checkbox");
         node.props = json!({"label": "Accept terms"});
-        let result = search_by_label(&node, "Accept terms", 0);
+        let result = search_tree(
+            &node,
+            0,
+            &|n| matches_label(n, "Accept terms"),
+            &node_to_value,
+        );
         assert!(result.is_some());
         assert_eq!(result.unwrap()["id"], "chk");
     }
@@ -1243,7 +1177,12 @@ mod tests {
     #[test]
     fn search_by_label_matches_content_prop() {
         let node = make_text_node("txt", "Hello World");
-        let result = search_by_label(&node, "Hello World", 0);
+        let result = search_tree(
+            &node,
+            0,
+            &|n| matches_label(n, "Hello World"),
+            &node_to_value,
+        );
         assert!(result.is_some());
         assert_eq!(result.unwrap()["id"], "txt");
     }
@@ -1251,7 +1190,7 @@ mod tests {
     #[test]
     fn search_by_label_not_found() {
         let node = make_node("root", "column");
-        assert!(search_by_label(&node, "Missing", 0).is_none());
+        assert!(search_tree(&node, 0, &|n| matches_label(n, "Missing"), &node_to_value).is_none());
     }
 
     // -- search_focused --
@@ -1260,7 +1199,7 @@ mod tests {
     fn search_focused_matches_focused_prop() {
         let mut node = make_node("inp", "text_input");
         node.props = json!({"focused": true});
-        let result = search_focused(&node, 0);
+        let result = search_tree(&node, 0, &is_focused, &node_to_value);
         assert!(result.is_some());
         assert_eq!(result.unwrap()["id"], "inp");
     }
@@ -1268,7 +1207,7 @@ mod tests {
     #[test]
     fn search_focused_matches_a11y_focused() {
         let node = make_a11y_node("inp", "text_input", json!({"focused": true}));
-        let result = search_focused(&node, 0);
+        let result = search_tree(&node, 0, &is_focused, &node_to_value);
         assert!(result.is_some());
         assert_eq!(result.unwrap()["id"], "inp");
     }
@@ -1277,7 +1216,7 @@ mod tests {
     fn search_focused_skips_unfocused() {
         let mut node = make_node("inp", "text_input");
         node.props = json!({"focused": false});
-        assert!(search_focused(&node, 0).is_none());
+        assert!(search_tree(&node, 0, &is_focused, &node_to_value).is_none());
     }
 
     #[test]
@@ -1286,7 +1225,7 @@ mod tests {
         let mut child = make_node("inp", "text_input");
         child.props = json!({"focused": true});
         root.children.push(child);
-        let result = search_focused(&root, 0);
+        let result = search_tree(&root, 0, &is_focused, &node_to_value);
         assert!(result.is_some());
         assert_eq!(result.unwrap()["id"], "inp");
     }
@@ -1294,7 +1233,7 @@ mod tests {
     #[test]
     fn search_focused_not_found() {
         let root = make_node("root", "column");
-        assert!(search_focused(&root, 0).is_none());
+        assert!(search_tree(&root, 0, &is_focused, &node_to_value).is_none());
     }
 
     // -- find_id_by_role / find_id_by_label / find_id_focused --
