@@ -21,9 +21,8 @@
 #![deny(warnings)]
 
 mod headless;
-mod scripting;
-
 mod renderer;
+mod scripting;
 
 /// Entry point for the julep renderer.
 ///
