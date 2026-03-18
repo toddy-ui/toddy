@@ -1,5 +1,8 @@
-use std::collections::HashMap;
+//! Layout widgets: column, row, container, stack, grid, pin,
+//! keyed_column, float, responsive, scrollable, and pane_grid.
+
 use std::collections::hash_map::DefaultHasher;
+use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 
 use iced::widget::scrollable::Anchor;
@@ -8,6 +11,7 @@ use iced::widget::{
 };
 use iced::{Element, Fill, Length, Point, Vector, widget};
 
+use super::caches::WidgetCaches;
 use super::helpers::*;
 use crate::extensions::RenderCtx;
 use crate::message::{Message, ScrollViewport};
@@ -616,10 +620,6 @@ pub(crate) fn render_pane_grid<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> El
 // ---------------------------------------------------------------------------
 // Cache ensure functions
 // ---------------------------------------------------------------------------
-
-use std::collections::HashSet;
-
-use super::caches::WidgetCaches;
 
 pub(crate) fn ensure_pane_grid_cache(node: &TreeNode, caches: &mut WidgetCaches) {
     let props = node.props.as_object();
