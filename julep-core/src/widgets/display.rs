@@ -1,8 +1,15 @@
+//! Display widgets: text, rich_text, image, svg, markdown, progress_bar,
+//! rule, space, and qr_code.
+
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
 use iced::widget::text::LineHeight;
-use iced::widget::{Space, canvas, container, progress_bar, rich_text, rule, span, text};
+use iced::widget::{Space, canvas, container, markdown, progress_bar, rich_text, rule, span, text};
 use iced::{Color, Element, Font, Length, Padding, Pixels, Point, Radians, Rotation, Size, mouse};
 use serde_json::Value;
 
+use super::caches::{WidgetCaches, hash_str};
 use super::helpers::*;
 use crate::extensions::RenderCtx;
 use crate::message::Message;
@@ -333,8 +340,6 @@ pub(crate) fn render_svg<'a>(node: &'a TreeNode, _ctx: RenderCtx<'a>) -> Element
 // ---------------------------------------------------------------------------
 
 pub(crate) fn render_markdown<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
-    use iced::widget::markdown;
-
     let props = node.props.as_object();
     let items = match ctx.caches.markdown_items.get(&node.id) {
         Some((_hash, items)) => items.as_slice(),
@@ -345,50 +350,30 @@ pub(crate) fn render_markdown<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Ele
     };
 
     // Build markdown Settings from props, falling back to theme defaults.
-    let link_color = prop_color(props, "link_color");
-    let settings = if let Some(text_size) = prop_f32(props, "text_size").or(ctx.default_text_size) {
-        let mut s = markdown::Settings::with_text_size(text_size, markdown::Style::from(ctx.theme));
-        if let Some(v) = prop_f32(props, "h1_size") {
-            s.h1_size = Pixels(v);
-        }
-        if let Some(v) = prop_f32(props, "h2_size") {
-            s.h2_size = Pixels(v);
-        }
-        if let Some(v) = prop_f32(props, "h3_size") {
-            s.h3_size = Pixels(v);
-        }
-        if let Some(v) = prop_f32(props, "code_size") {
-            s.code_size = Pixels(v);
-        }
-        if let Some(v) = prop_f32(props, "spacing") {
-            s.spacing = Pixels(v);
-        }
-        if let Some(lc) = link_color {
-            s.style.link_color = lc;
-        }
-        s
-    } else {
-        let mut s = markdown::Settings::from(ctx.theme);
-        if let Some(v) = prop_f32(props, "h1_size") {
-            s.h1_size = Pixels(v);
-        }
-        if let Some(v) = prop_f32(props, "h2_size") {
-            s.h2_size = Pixels(v);
-        }
-        if let Some(v) = prop_f32(props, "h3_size") {
-            s.h3_size = Pixels(v);
-        }
-        if let Some(v) = prop_f32(props, "code_size") {
-            s.code_size = Pixels(v);
-        }
-        if let Some(v) = prop_f32(props, "spacing") {
-            s.spacing = Pixels(v);
-        }
-        if let Some(lc) = link_color {
-            s.style.link_color = lc;
-        }
-        s
-    };
+    let mut settings =
+        if let Some(text_size) = prop_f32(props, "text_size").or(ctx.default_text_size) {
+            markdown::Settings::with_text_size(text_size, markdown::Style::from(ctx.theme))
+        } else {
+            markdown::Settings::from(ctx.theme)
+        };
+    if let Some(v) = prop_f32(props, "h1_size") {
+        settings.h1_size = Pixels(v);
+    }
+    if let Some(v) = prop_f32(props, "h2_size") {
+        settings.h2_size = Pixels(v);
+    }
+    if let Some(v) = prop_f32(props, "h3_size") {
+        settings.h3_size = Pixels(v);
+    }
+    if let Some(v) = prop_f32(props, "code_size") {
+        settings.code_size = Pixels(v);
+    }
+    if let Some(v) = prop_f32(props, "spacing") {
+        settings.spacing = Pixels(v);
+    }
+    if let Some(lc) = prop_color(props, "link_color") {
+        settings.style.link_color = lc;
+    }
 
     let mut md: Element<'a, Message> = markdown::view(items, settings).map(Message::MarkdownUrl);
 
@@ -479,65 +464,38 @@ pub(crate) fn render_rule<'a>(node: &'a TreeNode, _ctx: RenderCtx<'a>) -> Elemen
     .or_else(|| prop_f32(props, "thickness"))
     .unwrap_or(1.0);
 
-    if direction == "vertical" {
-        let mut r = rule::vertical(thickness);
-        if let Some(style_val) = props.and_then(|p| p.get("style")) {
-            if let Some(style_name) = style_val.as_str() {
-                r = match style_name {
-                    "default" => r.style(rule::default),
-                    "weak" => r.style(rule::weak),
-                    _ => {
-                        log::warn!(
-                            "unknown style {:?} for widget type {:?}, using default",
-                            style_name,
-                            "rule"
-                        );
-                        r
-                    }
-                };
-            } else if let Some(obj) = style_val.as_object() {
-                let ov = parse_style_overrides(obj);
-                r = r.style(move |theme: &iced::Theme| {
-                    let base_fn: fn(&iced::Theme) -> rule::Style = match ov.preset_base.as_deref() {
-                        Some("default") => rule::default,
-                        Some("weak") => rule::weak,
-                        _ => rule::default,
-                    };
-                    apply_rule_style(&mut base_fn(theme), &ov.base)
-                });
-            }
-        }
-        r.into()
+    let mut r = if direction == "vertical" {
+        rule::vertical(thickness)
     } else {
-        let mut r = rule::horizontal(thickness);
-        if let Some(style_val) = props.and_then(|p| p.get("style")) {
-            if let Some(style_name) = style_val.as_str() {
-                r = match style_name {
-                    "default" => r.style(rule::default),
-                    "weak" => r.style(rule::weak),
-                    _ => {
-                        log::warn!(
-                            "unknown style {:?} for widget type {:?}, using default",
-                            style_name,
-                            "rule"
-                        );
-                        r
-                    }
+        rule::horizontal(thickness)
+    };
+    if let Some(style_val) = props.and_then(|p| p.get("style")) {
+        if let Some(style_name) = style_val.as_str() {
+            r = match style_name {
+                "default" => r.style(rule::default),
+                "weak" => r.style(rule::weak),
+                _ => {
+                    log::warn!(
+                        "unknown style {:?} for widget type {:?}, using default",
+                        style_name,
+                        "rule"
+                    );
+                    r
+                }
+            };
+        } else if let Some(obj) = style_val.as_object() {
+            let ov = parse_style_overrides(obj);
+            r = r.style(move |theme: &iced::Theme| {
+                let base_fn: fn(&iced::Theme) -> rule::Style = match ov.preset_base.as_deref() {
+                    Some("default") => rule::default,
+                    Some("weak") => rule::weak,
+                    _ => rule::default,
                 };
-            } else if let Some(obj) = style_val.as_object() {
-                let ov = parse_style_overrides(obj);
-                r = r.style(move |theme: &iced::Theme| {
-                    let base_fn: fn(&iced::Theme) -> rule::Style = match ov.preset_base.as_deref() {
-                        Some("default") => rule::default,
-                        Some("weak") => rule::weak,
-                        _ => rule::default,
-                    };
-                    apply_rule_style(&mut base_fn(theme), &ov.base)
-                });
-            }
+                apply_rule_style(&mut base_fn(theme), &ov.base)
+            });
         }
-        r.into()
     }
+    r.into()
 }
 
 // ---------------------------------------------------------------------------
@@ -658,13 +616,6 @@ pub(crate) fn render_qr_code<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Elem
 // ---------------------------------------------------------------------------
 // Cache ensure functions
 // ---------------------------------------------------------------------------
-
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-
-use iced::widget::markdown;
-
-use super::caches::{WidgetCaches, hash_str};
 
 pub(crate) fn ensure_markdown_cache(node: &TreeNode, caches: &mut WidgetCaches) {
     let props = node.props.as_object();
