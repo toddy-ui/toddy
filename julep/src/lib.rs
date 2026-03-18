@@ -2,11 +2,17 @@
 //!
 //! Native GUI renderer binary. Three execution modes:
 //!
-//! - **Default:** `julep` -- Full iced::daemon with real windows.
-//! - **Headless:** `julep --headless` -- Core + wire protocol only,
-//!   no display server required. Useful for CI and integration testing.
-//! - **Test mode:** `julep --test` -- Real iced::daemon windows plus
-//!   test protocol messages (Query, Interact, SnapshotCapture).
+//! - **Default:** `julep` -- Full iced::daemon with real windows and
+//!   GPU rendering. Production mode.
+//! - **Headless:** `julep --headless` -- No display server. Real
+//!   rendering via tiny-skia with persistent widget state. Accurate
+//!   screenshots after interactions. For CI with visual verification.
+//! - **Mock:** `julep --mock` -- No rendering. Core + wire protocol
+//!   only. Stub screenshots. For fast protocol-level testing from
+//!   any language.
+//!
+//! All modes handle scripting messages (Query, Interact, SnapshotCapture,
+//! ScreenshotCapture, Reset) for programmatic inspection and interaction.
 //!
 //! Wire codec auto-detection: the first byte of stdin determines the format
 //! (`{` = JSON, anything else = MessagePack). Override with `--json` or
@@ -15,8 +21,8 @@
 #![deny(warnings)]
 
 mod headless;
-mod test_mode;
-mod test_protocol;
+mod mock;
+mod scripting;
 
 mod renderer;
 

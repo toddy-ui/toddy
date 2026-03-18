@@ -1,6 +1,6 @@
-// test_protocol.rs -- Shared protocol helpers for headless and test modes.
+// scripting.rs -- Protocol helpers for scripting messages.
 //
-// Both --headless and --test modes handle Query/Interact/Reset/SnapshotCapture
+// Both the daemon and headless modes handle Query/Interact/Reset/SnapshotCapture
 // messages from stdin. The logic is identical; only the surrounding event loop
 // differs. This module contains the canonical implementations so the two modes
 // stay in sync.

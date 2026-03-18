@@ -283,24 +283,26 @@ impl Core {
                     height,
                 });
             }
-            // Variants handled by the renderer binary (headless / test_mode),
-            // not by Core. Listed explicitly so adding a new IncomingMessage
-            // variant produces a compile error here instead of silently falling
-            // through a catch-all `_` arm.
+            // Scripting messages handled by the renderer binary (daemon /
+            // headless), not by Core. Listed explicitly so adding a new
+            // IncomingMessage variant produces a compile error here instead
+            // of silently falling through a catch-all `_` arm.
             IncomingMessage::Query { .. } => {
-                log::debug!("Query message ignored by Core (handled by headless/test_mode)");
+                log::debug!("Query message ignored by Core (handled by scripting layer)");
             }
             IncomingMessage::Interact { .. } => {
-                log::debug!("Interact message ignored by Core (handled by test_mode)");
+                log::debug!("Interact message ignored by Core (handled by scripting layer)");
             }
             IncomingMessage::SnapshotCapture { .. } => {
-                log::debug!("SnapshotCapture message ignored by Core (handled by test_mode)");
+                log::debug!("SnapshotCapture message ignored by Core (handled by scripting layer)");
             }
             IncomingMessage::ScreenshotCapture { .. } => {
-                log::debug!("ScreenshotCapture message ignored by Core (handled by test_mode)");
+                log::debug!(
+                    "ScreenshotCapture message ignored by Core (handled by scripting layer)"
+                );
             }
             IncomingMessage::Reset { .. } => {
-                log::debug!("Reset message ignored by Core (handled by test_mode)");
+                log::debug!("Reset message ignored by Core (handled by scripting layer)");
             }
             IncomingMessage::ExtensionCommand { .. } => {
                 log::debug!("ExtensionCommand message ignored by Core (handled by renderer App)");
@@ -566,7 +568,7 @@ mod tests {
     #[test]
     fn unhandled_message_returns_empty_effects() {
         let mut core = Core::new();
-        // Query is handled by headless/test_mode, not Core -- hits the catch-all
+        // Query is handled by the scripting layer, not Core -- hits the catch-all
         let msg = IncomingMessage::Query {
             id: "q1".to_string(),
             target: "tree".to_string(),

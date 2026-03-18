@@ -379,7 +379,7 @@ Manage windows directly (outside of tree-driven sync).
 | `get_scale_factor` | scale_factor |
 | `is_maximized` | maximized |
 | `is_minimized` | minimized |
-| `screenshot` | width, height, bytes_len, rgba (test-mode only) |
+| `screenshot` | width, height, bytes_len, rgba |
 | `raw_id` | raw_id, platform |
 | `monitor_size` | width, height (logical pixels) |
 | `set_icon` | icon_data (base64 RGBA), width, height |
@@ -704,10 +704,10 @@ JSON serialization errors and ensures all values are valid numbers.
 
 ---
 
-## Test-mode messages
+## Scripting messages
 
-The following message types are only available in test mode
-(`--test` flag):
+The following message types are available in both daemon and
+headless modes for programmatic inspection and interaction:
 
 - **Query** -- Inspect the tree or find widgets
 - **Interact** -- Simulate user interactions (click, type, etc.)
@@ -715,8 +715,8 @@ The following message types are only available in test mode
 - **ScreenshotCapture** -- Capture rendered pixels
 - **Reset** -- Reset all state
 
-These are used for integration testing and are not part of the
-normal protocol flow.
+These are commonly used for integration testing but are always
+available as part of the standard protocol.
 
 ---
 

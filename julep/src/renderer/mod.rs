@@ -45,8 +45,6 @@ struct App {
     window_map: HashMap<String, window::Id>,
     /// Iced window ID -> julep window ID.
     reverse_window_map: HashMap<window::Id, String>,
-    /// When true, handle Query/Interact/SnapshotCapture/ScreenshotCapture/Reset on stdin.
-    test_mode: bool,
     /// In-memory image handles for use by Image widgets and canvas draw.
     image_registry: julep_core::image_registry::ImageRegistry,
     /// Current system theme, tracked via ThemeChanged subscription.
@@ -70,17 +68,13 @@ struct App {
 }
 
 impl App {
-    fn new(test_mode: bool, dispatcher: ExtensionDispatcher) -> Self {
-        if test_mode {
-            log::info!("running in test mode");
-        }
+    fn new(dispatcher: ExtensionDispatcher) -> Self {
         Self {
             core: julep_core::engine::Core::new(),
             theme: Theme::Dark,
             pending_tasks: Vec::new(),
             window_map: HashMap::new(),
             reverse_window_map: HashMap::new(),
-            test_mode,
             image_registry: julep_core::image_registry::ImageRegistry::new(),
             system_theme: Theme::Dark,
             theme_follows_system: false,
@@ -473,104 +467,105 @@ impl App {
     fn handle_stdin(&mut self, event: StdinEvent) -> Task<Message> {
         match event {
             StdinEvent::Message(incoming) => {
-                // In test mode, handle test-specific messages directly
-                // instead of passing them to Core::apply.
-                if self.test_mode && crate::test_mode::test_helpers::is_test_message(&incoming) {
-                    match incoming {
-                        IncomingMessage::Query {
+                // Handle scripting messages directly instead of passing
+                // them to Core::apply. All other messages fall through.
+                match incoming {
+                    IncomingMessage::Query {
+                        id,
+                        target,
+                        selector,
+                    } => {
+                        crate::scripting::handle_query(&self.core, id, target, selector);
+                        Task::none()
+                    }
+                    IncomingMessage::Interact {
+                        id,
+                        action,
+                        selector,
+                        payload,
+                    } => {
+                        // Emit synthetic julep events (host-managed state).
+                        crate::scripting::handle_interact(
+                            &self.core,
                             id,
-                            target,
-                            selector,
-                        } => {
-                            crate::test_protocol::handle_query(&self.core, id, target, selector);
-                            return Task::none();
+                            action.clone(),
+                            selector.clone(),
+                            payload.clone(),
+                        );
+
+                        // Inject real iced events (renderer-managed state).
+                        let iced_events = crate::headless::interaction_to_iced_events(
+                            &action,
+                            None,
+                            &payload,
+                            iced::mouse::Cursor::Unavailable,
+                        );
+                        if let Some((_, &iced_id)) = self.window_map.iter().next()
+                            && !iced_events.is_empty()
+                        {
+                            window::inject_events(iced_id, iced_events).discard()
+                        } else {
+                            Task::none()
                         }
-                        IncomingMessage::Interact {
-                            id,
-                            action,
-                            selector,
-                            payload,
-                        } => {
-                            // Emit synthetic julep events (host-managed state).
-                            crate::test_protocol::handle_interact(
-                                &self.core,
-                                id,
-                                action.clone(),
-                                selector.clone(),
-                                payload.clone(),
-                            );
+                    }
+                    IncomingMessage::Reset { id } => {
+                        // Clean up extension state before wiping core.
+                        self.dispatcher.reset(&mut self.core.caches.extension);
 
-                            // Inject real iced events (renderer-managed state).
-                            let iced_events = crate::headless::interaction_to_iced_events(
-                                &action,
-                                None,
-                                &payload,
-                                iced::mouse::Cursor::Unavailable,
-                            );
-                            if let Some((_, &iced_id)) = self.window_map.iter().next()
-                                && !iced_events.is_empty()
-                            {
-                                return window::inject_events(iced_id, iced_events).discard();
-                            }
-                            return Task::none();
-                        }
-                        IncomingMessage::Reset { id } => {
-                            // Clean up extension state before wiping core.
-                            self.dispatcher.reset(&mut self.core.caches.extension);
+                        // Reset core and emit the response.
+                        crate::scripting::handle_reset(&mut self.core, id);
 
-                            // Reset core and emit the response.
-                            crate::test_protocol::handle_reset(&mut self.core, id);
+                        // Close all open windows and clear maps.
+                        let close_tasks: Vec<Task<Message>> = self
+                            .window_map
+                            .values()
+                            .map(|&iced_id| window::close(iced_id))
+                            .collect();
+                        self.window_map.clear();
+                        self.reverse_window_map.clear();
 
-                            // Close all open windows and clear maps.
-                            let close_tasks: Vec<Task<Message>> = self
-                                .window_map
-                                .values()
-                                .map(|&iced_id| window::close(iced_id))
-                                .collect();
-                            self.window_map.clear();
-                            self.reverse_window_map.clear();
+                        // Reset remaining App-level state.
+                        self.image_registry = julep_core::image_registry::ImageRegistry::new();
+                        self.theme = Theme::Dark;
+                        self.theme_follows_system = false;
+                        self.scale_factor = 1.0;
+                        self.last_slide_values.clear();
+                        self.pending_tasks.clear();
+                        self.window_theme_cache.clear();
+                        self.decoration_state.clear();
 
-                            // Reset remaining App-level state.
-                            self.image_registry = julep_core::image_registry::ImageRegistry::new();
-                            self.theme = Theme::Dark;
-                            self.theme_follows_system = false;
-                            self.scale_factor = 1.0;
-                            self.last_slide_values.clear();
-                            self.pending_tasks.clear();
-                            self.window_theme_cache.clear();
-                            self.decoration_state.clear();
-
-                            return Task::batch(close_tasks);
-                        }
-                        IncomingMessage::SnapshotCapture { id, name, .. } => {
-                            crate::test_protocol::handle_snapshot_capture(&self.core, id, name);
-                            return Task::none();
-                        }
-                        IncomingMessage::ScreenshotCapture { id, name, .. } => {
-                            // Capture real GPU-rendered pixels via iced
-                            if let Some((_, &iced_id)) = self.window_map.iter().next() {
-                                return window::screenshot(iced_id).map(move |shot| {
-                                    use sha2::{Digest, Sha256};
-                                    let rgba: &[u8] = &shot.rgba;
-                                    let mut hasher = Sha256::new();
-                                    hasher.update(rgba);
-                                    let hash = format!("{:x}", hasher.finalize());
-                                    let w = shot.size.width;
-                                    let h = shot.size.height;
-                                    emit_screenshot_response(&id, &name, &hash, w, h, rgba);
-                                    Message::NoOp
-                                });
-                            }
+                        Task::batch(close_tasks)
+                    }
+                    IncomingMessage::SnapshotCapture { id, name, .. } => {
+                        crate::scripting::handle_snapshot_capture(&self.core, id, name);
+                        Task::none()
+                    }
+                    IncomingMessage::ScreenshotCapture { id, name, .. } => {
+                        // Capture real GPU-rendered pixels via iced
+                        if let Some((_, &iced_id)) = self.window_map.iter().next() {
+                            window::screenshot(iced_id).map(move |shot| {
+                                use sha2::{Digest, Sha256};
+                                let rgba: &[u8] = &shot.rgba;
+                                let mut hasher = Sha256::new();
+                                hasher.update(rgba);
+                                let hash = format!("{:x}", hasher.finalize());
+                                let w = shot.size.width;
+                                let h = shot.size.height;
+                                emit_screenshot_response(&id, &name, &hash, w, h, rgba);
+                                Message::NoOp
+                            })
+                        } else {
                             // No windows open -- return empty screenshot
                             emit_screenshot_response(&id, &name, "", 0, 0, &[]);
-                            return Task::none();
+                            Task::none()
                         }
-                        _ => return Task::none(),
+                    }
+                    other => {
+                        self.apply(other);
+                        let tasks: Vec<Task<Message>> = self.pending_tasks.drain(..).collect();
+                        Task::batch(tasks)
                     }
                 }
-                self.apply(incoming);
-                let tasks: Vec<Task<Message>> = self.pending_tasks.drain(..).collect();
-                Task::batch(tasks)
             }
             StdinEvent::Warning(msg) => {
                 log::warn!("stdin warning: {msg}");
@@ -1616,13 +1611,15 @@ pub(crate) fn run(builder: julep_core::app::JulepAppBuilder) -> iced::Result {
     };
 
     {
+        if args.contains(&"--mock".to_string()) {
+            crate::mock::run(forced_codec, builder.build_dispatcher());
+            return Ok(());
+        }
         if args.contains(&"--headless".to_string()) {
             crate::headless::run(forced_codec, builder.build_dispatcher());
             return Ok(());
         }
     }
-
-    let test_mode = args.contains(&"--test".to_string());
 
     // Read the first message synchronously to get iced settings and font
     // data before the daemon starts. This must happen before the stdin
@@ -1658,7 +1655,7 @@ pub(crate) fn run(builder: julep_core::app::JulepAppBuilder) -> iced::Result {
                 .take()
                 .expect("daemon init closure called more than once")
                 .build_dispatcher();
-            let mut app = App::new(test_mode, dispatcher);
+            let mut app = App::new(dispatcher);
 
             // Extract scale_factor before applying settings to Core
             let sf = settings

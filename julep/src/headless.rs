@@ -179,7 +179,7 @@ impl Session {
 // Key string -> iced Key conversion
 // ---------------------------------------------------------------------------
 
-/// Convert a key name string (as sent by the test protocol) to an iced
+/// Convert a key name string (as sent by the scripting protocol) to an iced
 /// `keyboard::Key`. Named keys use their Debug format (e.g. "Enter",
 /// "Tab", "ArrowUp"); single characters become `Key::Character`.
 pub(crate) fn parse_iced_key(name: &str) -> Key {
@@ -223,7 +223,7 @@ pub(crate) fn parse_iced_key(name: &str) -> Key {
     }
 }
 
-/// Build iced `Modifiers` from parsed test protocol modifiers JSON.
+/// Build iced `Modifiers` from parsed scripting protocol modifiers JSON.
 pub(crate) fn parse_iced_modifiers(mods: &Value) -> Modifiers {
     let mut m = Modifiers::empty();
     if mods.get("shift").and_then(|v| v.as_bool()).unwrap_or(false) {
@@ -273,7 +273,7 @@ pub(crate) fn make_key_released(key: Key, modifiers: Modifiers) -> Event {
 // Interaction -> iced events
 // ---------------------------------------------------------------------------
 
-/// Convert a test protocol interaction into a sequence of iced events.
+/// Convert a scripting protocol interaction into a sequence of iced events.
 ///
 /// Returns an empty vec for action types that don't map to iced events
 /// (synthetic-only actions like paste, sort, canvas_*, pane_focus_cycle).
@@ -313,7 +313,7 @@ pub(crate) fn interaction_to_iced_events(
         }
         "type_key" => {
             let payload_map = payload.as_object();
-            let (key_str, mods_json) = crate::test_protocol::parse_key_and_modifiers(payload_map);
+            let (key_str, mods_json) = crate::scripting::parse_key_and_modifiers(payload_map);
             let key = parse_iced_key(&key_str);
             let modifiers = parse_iced_modifiers(&mods_json);
             let text = match &key {
@@ -327,7 +327,7 @@ pub(crate) fn interaction_to_iced_events(
         }
         "press" => {
             let payload_map = payload.as_object();
-            let (key_str, mods_json) = crate::test_protocol::parse_key_and_modifiers(payload_map);
+            let (key_str, mods_json) = crate::scripting::parse_key_and_modifiers(payload_map);
             let key = parse_iced_key(&key_str);
             let modifiers = parse_iced_modifiers(&mods_json);
             let text = match &key {
@@ -338,7 +338,7 @@ pub(crate) fn interaction_to_iced_events(
         }
         "release" => {
             let payload_map = payload.as_object();
-            let (key_str, mods_json) = crate::test_protocol::parse_key_and_modifiers(payload_map);
+            let (key_str, mods_json) = crate::scripting::parse_key_and_modifiers(payload_map);
             let key = parse_iced_key(&key_str);
             let modifiers = parse_iced_modifiers(&mods_json);
             vec![make_key_released(key, modifiers)]
@@ -460,10 +460,10 @@ fn handle_message(s: &mut Session, msg: IncomingMessage) {
                 use julep_core::engine::CoreEffect;
                 match effect {
                     CoreEffect::EmitEvent(event) => {
-                        crate::test_protocol::emit_wire(&event);
+                        crate::scripting::emit_wire(&event);
                     }
                     CoreEffect::EmitEffectResponse(response) => {
-                        crate::test_protocol::emit_wire(&response);
+                        crate::scripting::emit_wire(&response);
                     }
                     CoreEffect::SpawnAsyncEffect {
                         request_id,
@@ -474,12 +474,10 @@ fn handle_message(s: &mut Session, msg: IncomingMessage) {
                             "headless: async effect {effect_type} returning cancelled \
                              (no display)"
                         );
-                        crate::test_protocol::emit_wire(
-                            &julep_core::protocol::EffectResponse::error(
-                                request_id,
-                                "cancelled".to_string(),
-                            ),
-                        );
+                        crate::scripting::emit_wire(&julep_core::protocol::EffectResponse::error(
+                            request_id,
+                            "cancelled".to_string(),
+                        ));
                     }
                     CoreEffect::ThemeChanged(t) => {
                         s.theme = t;
@@ -526,13 +524,13 @@ fn handle_message(s: &mut Session, msg: IncomingMessage) {
             }
         }
 
-        // Test protocol messages
+        // Scripting messages
         IncomingMessage::Query {
             id,
             target,
             selector,
         } => {
-            crate::test_protocol::handle_query(&s.core, id, target, selector);
+            crate::scripting::handle_query(&s.core, id, target, selector);
         }
         IncomingMessage::Interact {
             id,
@@ -552,10 +550,10 @@ fn handle_message(s: &mut Session, msg: IncomingMessage) {
             }
 
             // Emit synthetic events back to the host (unchanged behaviour).
-            crate::test_protocol::handle_interact(&s.core, id, action, selector, payload);
+            crate::scripting::handle_interact(&s.core, id, action, selector, payload);
         }
         IncomingMessage::SnapshotCapture { id, name, .. } => {
-            crate::test_protocol::handle_snapshot_capture(&s.core, id, name);
+            crate::scripting::handle_snapshot_capture(&s.core, id, name);
         }
         IncomingMessage::ScreenshotCapture {
             id,
@@ -578,7 +576,7 @@ fn handle_message(s: &mut Session, msg: IncomingMessage) {
             s.ui_cache = UiCache::default();
             s.cursor = mouse::Cursor::Unavailable;
             s.rebuild_renderer();
-            crate::test_protocol::handle_reset(&mut s.core, id);
+            crate::scripting::handle_reset(&mut s.core, id);
         }
         IncomingMessage::ExtensionCommand {
             node_id,
@@ -589,7 +587,7 @@ fn handle_message(s: &mut Session, msg: IncomingMessage) {
                 .dispatcher
                 .handle_command(&node_id, &op, &payload, &mut s.ext_caches);
             for event in events {
-                crate::test_protocol::emit_wire(&event);
+                crate::scripting::emit_wire(&event);
             }
         }
         IncomingMessage::ExtensionCommandBatch { commands } => {
@@ -601,18 +599,16 @@ fn handle_message(s: &mut Session, msg: IncomingMessage) {
                     &mut s.ext_caches,
                 );
                 for event in events {
-                    crate::test_protocol::emit_wire(&event);
+                    crate::scripting::emit_wire(&event);
                 }
             }
         }
         IncomingMessage::AdvanceFrame { timestamp } => {
             if let Some(tag) = s.core.active_subscriptions.get("on_animation_frame") {
-                crate::test_protocol::emit_wire(
-                    &julep_core::protocol::OutgoingEvent::animation_frame(
-                        tag.clone(),
-                        timestamp as u128,
-                    ),
-                );
+                crate::scripting::emit_wire(&julep_core::protocol::OutgoingEvent::animation_frame(
+                    tag.clone(),
+                    timestamp as u128,
+                ));
             }
         }
     }
@@ -620,8 +616,8 @@ fn handle_message(s: &mut Session, msg: IncomingMessage) {
 
 /// Resolve a widget ID from a selector, without emitting anything.
 fn resolve_widget_id(core: &Core, selector: &Value) -> Option<String> {
-    use crate::test_protocol::Selector;
-    use crate::test_protocol::parse_selector;
+    use crate::scripting::Selector;
+    use crate::scripting::parse_selector;
 
     match parse_selector(selector)? {
         Selector::Id(wid) => Some(wid),
@@ -641,9 +637,9 @@ fn resolve_widget_id(core: &Core, selector: &Value) -> Option<String> {
     }
 }
 
-// Re-use the search helpers from test_protocol. They're pub, just
+// Re-use the search helpers from scripting. They're pub, just
 // not exported from the crate. Import them by full path.
-use crate::test_protocol::{find_id_by_label, find_id_by_role, find_id_by_text, find_id_focused};
+use crate::scripting::{find_id_by_label, find_id_by_role, find_id_by_text, find_id_focused};
 
 /// Handle a ScreenshotCapture message.
 ///
