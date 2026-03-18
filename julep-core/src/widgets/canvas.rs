@@ -851,6 +851,7 @@ pub(crate) fn json_color(val: &Value, key: &str) -> Color {
 
 #[cfg(test)]
 mod tests {
+    use super::super::caches::{canvas_layer_map, hash_str};
     use super::*;
     use serde_json::json;
 
@@ -868,7 +869,7 @@ mod tests {
             }
         });
         let props = make_props(&v);
-        let result = super::super::canvas_layer_map(props);
+        let result = canvas_layer_map(props);
         assert_eq!(result.len(), 2);
         assert!(result.contains_key("background"));
         assert!(result.contains_key("foreground"));
@@ -885,16 +886,16 @@ mod tests {
             "shapes": [{"type": "line", "x1": 0, "y1": 0, "x2": 100, "y2": 100}]
         });
         let props = make_props(&v);
-        let result = super::super::canvas_layer_map(props);
+        let result = canvas_layer_map(props);
         assert_eq!(result.len(), 1);
         assert!(result.contains_key("default"));
     }
 
     #[test]
     fn canvas_hash_changes() {
-        let hash_a = super::super::hash_str("[{\"type\":\"rect\"}]");
-        let hash_b = super::super::hash_str("[{\"type\":\"circle\"}]");
-        let hash_a2 = super::super::hash_str("[{\"type\":\"rect\"}]");
+        let hash_a = hash_str("[{\"type\":\"rect\"}]");
+        let hash_b = hash_str("[{\"type\":\"circle\"}]");
+        let hash_a2 = hash_str("[{\"type\":\"rect\"}]");
 
         // Same input produces same hash.
         assert_eq!(hash_a, hash_a2);
@@ -912,7 +913,7 @@ mod tests {
             }
         });
         let props = make_props(&v);
-        let result = super::super::canvas_layer_map(props);
+        let result = canvas_layer_map(props);
         let keys: Vec<&String> = result.keys().collect();
         assert_eq!(keys, vec!["alpha", "bravo", "charlie"]);
     }
