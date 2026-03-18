@@ -1,3 +1,9 @@
+//! Application struct and core utility methods.
+//!
+//! Defines the [`App`] struct (the iced daemon's state) and the methods
+//! that the rest of the renderer module uses to query window titles,
+//! themes, scale factors, and emit subscription events.
+
 use std::collections::HashMap;
 
 use iced::{Task, Theme, window};
@@ -14,6 +20,10 @@ use super::window_map;
 // App state
 // ---------------------------------------------------------------------------
 
+/// The iced daemon application. Owns the rendering engine, window
+/// state, extension dispatcher, and all runtime state needed to
+/// translate between the stdin/stdout protocol and iced's update/view
+/// cycle.
 pub(super) struct App {
     pub(super) core: julep_core::engine::Core,
     pub(super) theme: Theme,
@@ -43,11 +53,11 @@ impl App {
     pub(super) fn new(dispatcher: ExtensionDispatcher) -> Self {
         Self {
             core: julep_core::engine::Core::new(),
-            theme: Theme::Dark,
+            theme: DEFAULT_THEME,
             pending_tasks: Vec::new(),
             windows: window_map::WindowMap::new(),
             image_registry: julep_core::image_registry::ImageRegistry::new(),
-            system_theme: Theme::Dark,
+            system_theme: DEFAULT_THEME,
             theme_follows_system: false,
             scale_factor: 1.0,
             last_slide_values: HashMap::new(),
@@ -99,7 +109,7 @@ impl App {
             .map(|v| v as f32)
             .unwrap_or(self.scale_factor);
         if sf <= 0.0 || !sf.is_finite() {
-            log::warn!("invalid scale_factor {sf}, using 1.0");
+            log::warn!("invalid scale_factor {sf} for window {window_id:?}, using 1.0");
             1.0
         } else {
             sf

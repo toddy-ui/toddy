@@ -1,3 +1,7 @@
+//! Subscription event handlers for keyboard, mouse, touch, IME, window
+//! lifecycle, and pane grid events. Each handler checks whether the host
+//! subscribed to the event type before emitting it.
+
 use std::io;
 
 use iced::widget::pane_grid;

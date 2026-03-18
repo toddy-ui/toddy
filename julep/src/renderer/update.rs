@@ -1,3 +1,6 @@
+//! Message dispatcher and stdin handler. Routes iced messages to event
+//! handlers, emitters, or the apply pipeline.
+
 use iced::{Task, Theme, window};
 
 use julep_core::extensions::EventResult;
@@ -370,7 +373,7 @@ impl App {
 
                         // Reset remaining App-level state.
                         self.image_registry = julep_core::image_registry::ImageRegistry::new();
-                        self.theme = Theme::Dark;
+                        self.theme = DEFAULT_THEME;
                         self.theme_follows_system = false;
                         self.scale_factor = 1.0;
                         self.last_slide_values.clear();

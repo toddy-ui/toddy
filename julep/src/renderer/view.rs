@@ -1,3 +1,6 @@
+//! Renders a window's UI tree into iced `Element`s via julep-core's widget
+//! mapper.
+
 use iced::widget::{container, text};
 use iced::{Element, Fill, window};
 

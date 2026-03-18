@@ -37,3 +37,6 @@ pub(super) const SUB_THEME_CHANGE: &str = "on_theme_change";
 // -- Defaults ----------------------------------------------------------------
 
 pub(super) const DEFAULT_WINDOW_TITLE: &str = "julep";
+
+/// Default theme when no theme is specified in Settings or after a Reset.
+pub(super) const DEFAULT_THEME: iced::Theme = iced::Theme::Dark;

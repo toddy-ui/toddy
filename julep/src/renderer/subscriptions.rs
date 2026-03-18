@@ -1,3 +1,7 @@
+//! Builds the iced `Subscription` list based on which events the host has
+//! registered for. Split into per-category builders (keyboard, mouse, touch,
+//! IME, window, system).
+
 use iced::{Subscription, event, system, window};
 
 use julep_core::message::{KeyEventData, Message};

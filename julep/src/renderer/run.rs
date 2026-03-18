@@ -1,3 +1,6 @@
+//! Renderer entry point. Parses CLI flags, reads the initial Settings
+//! message, spawns the stdin reader, and starts the iced daemon.
+
 use std::sync::Mutex;
 
 use iced::Task;

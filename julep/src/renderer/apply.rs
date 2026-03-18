@@ -1,3 +1,6 @@
+//! Processes incoming protocol messages (snapshots, patches, settings,
+//! extension commands) by delegating to Core and handling resulting effects.
+
 use std::io;
 
 use iced::Task;
