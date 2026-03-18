@@ -7,10 +7,13 @@ mod incoming;
 mod outgoing;
 mod types;
 
-pub use incoming::{
-    EffectResponse, ExtensionCommandItem, IncomingMessage, InteractResponse, PROTOCOL_VERSION,
-    QueryResponse, ResetResponse, ScreenshotResponseEmpty, SnapshotCaptureResponse,
-    emit_screenshot_response,
+/// Protocol version number. Sent in the `hello` handshake message on startup
+/// and checked against the value the host embeds in Settings.
+pub const PROTOCOL_VERSION: u32 = 1;
+
+pub use incoming::{ExtensionCommandItem, IncomingMessage};
+pub use outgoing::{
+    EffectResponse, InteractResponse, KeyModifiers, OutgoingEvent, QueryResponse, ResetResponse,
+    ScreenshotResponseEmpty, SnapshotCaptureResponse, emit_screenshot_response,
 };
-pub use outgoing::{KeyModifiers, OutgoingEvent};
 pub use types::{PatchOp, TreeNode};
