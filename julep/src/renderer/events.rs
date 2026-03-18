@@ -16,6 +16,9 @@ use super::App;
 use super::constants::*;
 use super::emitters::{self, emit_event};
 
+/// Convert a file path to a UTF-8 string, using lossy conversion if
+/// the path contains non-UTF-8 bytes (rare on modern systems, but
+/// possible on Linux with legacy filenames).
 fn path_to_string(path: std::path::PathBuf) -> String {
     match path.to_str() {
         Some(s) => s.to_string(),
