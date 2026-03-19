@@ -11,16 +11,3 @@ repository = "https://github.com/toddy-ui/toddy"
 authors = ["Daniel Hedlund <daniel@digitree.org>"]
 keywords = ["gui", "desktop", "renderer", "native", "iced"]
 categories = ["gui", "rendering"]
-
-[patch.crates-io]
-toddy-iced = { path = "toddy-iced" }
-toddy-iced-core = { path = "toddy-iced/core" }
-toddy-iced-futures = { path = "toddy-iced/futures" }
-toddy-iced-renderer = { path = "toddy-iced/renderer" }
-toddy-iced-runtime = { path = "toddy-iced/runtime" }
-toddy-iced-widget = { path = "toddy-iced/widget" }
-toddy-iced-winit = { path = "toddy-iced/winit" }
-toddy-iced-wgpu = { path = "toddy-iced/wgpu" }
-toddy-iced-tiny-skia = { path = "toddy-iced/tiny_skia" }
-toddy-iced-test = { path = "toddy-iced/test" }
-toddy-iced-highlighter = { path = "toddy-iced/highlighter" }

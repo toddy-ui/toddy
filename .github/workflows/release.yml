@@ -41,10 +41,6 @@ jobs:
             asset: toddy-windows-x86_64.exe
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
-        with:
-          repository: toddy-ui/toddy-iced
-          path: toddy-iced
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.92.0"

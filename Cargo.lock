@@ -4363,6 +4363,8 @@ dependencies = [
 [[package]]
 name = "toddy-iced"
 version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "858c104562f2e403a42d4ce24220cacea1d220eeabda2fe389da41910ee9cb17"
 dependencies = [
  "image",
  "thiserror 2.0.18",
@@ -4379,6 +4381,8 @@ dependencies = [
 [[package]]
 name = "toddy-iced-core"
 version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "442133cae00bc41362e49bbf8db06114f530e35672c12fb5b58c011669f5cdab"
 dependencies = [
  "bitflags 2.11.0",
  "bytes",
@@ -4395,6 +4399,8 @@ dependencies = [
 [[package]]
 name = "toddy-iced-cryoglyph"
 version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6178569c48258436d94c6df31172efdd57bd2712cc08327fc0ec6c6f2fc1f8f"
 dependencies = [
  "cosmic-text",
  "etagere",
@@ -4406,6 +4412,8 @@ dependencies = [
 [[package]]
 name = "toddy-iced-debug"
 version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "857fda9cc7212b5c4ff0e8bd23d463b0fd2eb2bac2454387dac1ee1dce312a48"
 dependencies = [
  "log",
  "toddy-iced-core",
@@ -4415,6 +4423,8 @@ dependencies = [
 [[package]]
 name = "toddy-iced-futures"
 version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1276da34b0b7005ad1cb011160a1b1d4d2164d3693e14de5062a588aff4fb490"
 dependencies = [
  "futures",
  "log",
@@ -4428,6 +4438,8 @@ dependencies = [
 [[package]]
 name = "toddy-iced-graphics"
 version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9359f80165a9d5bc114591ccb6164d6a92a10591e4d9c349afec2af71dde4ec"
 dependencies = [
  "bitflags 2.11.0",
  "bytemuck",
@@ -4448,6 +4460,8 @@ dependencies = [
 [[package]]
 name = "toddy-iced-highlighter"
 version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "963ba57503ea87be550dd90e72f582c833732173971e62badca1313e61f9054b"
 dependencies = [
  "toddy-iced-core",
  "two-face",
@@ -4456,6 +4470,8 @@ dependencies = [
 [[package]]
 name = "toddy-iced-program"
 version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66acc583578a2ccdfa5eaaa8d7e5898b60b11ebc131541b583fc9256bae3360d"
 dependencies = [
  "toddy-iced-graphics",
  "toddy-iced-runtime",
@@ -4464,6 +4480,8 @@ dependencies = [
 [[package]]
 name = "toddy-iced-renderer"
 version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74bc6fce4cec1c4ef8bcec00c3744994577fb24e9cd0930be7d3f8b7bc658aaf"
 dependencies = [
  "log",
  "thiserror 2.0.18",
@@ -4475,6 +4493,8 @@ dependencies = [
 [[package]]
 name = "toddy-iced-runtime"
 version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5465bad43110b53ec6be074860476142b94f6c27d94943d27865e8ce8381c852"
 dependencies = [
  "bytes",
  "raw-window-handle",
@@ -4486,6 +4506,8 @@ dependencies = [
 [[package]]
 name = "toddy-iced-selector"
 version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47d48e9e041d29374a5faf81813bdb67d28a8fa28d98f90cc1926738e28ec3de"
 dependencies = [
  "toddy-iced-core",
 ]
@@ -4493,6 +4515,8 @@ dependencies = [
 [[package]]
 name = "toddy-iced-test"
 version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05b65b63b8882dd3fb37d54dfcdf60df85df952f7413ed62d3eca8ac09ce5df6"
 dependencies = [
  "nom",
  "png 0.18.1",
@@ -4508,6 +4532,8 @@ dependencies = [
 [[package]]
 name = "toddy-iced-tiny-skia"
 version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96e59d4ee5f5060299310c71ce378ac08d723615c9fdb4cff41817614e31c384"
 dependencies = [
  "bytemuck",
  "cosmic-text",
@@ -4524,6 +4550,8 @@ dependencies = [
 [[package]]
 name = "toddy-iced-wgpu"
 version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b996e57dda0fbecfdea877f9120c48361f86d536ef1d4e904fa05910e0d98a5"
 dependencies = [
  "bitflags 2.11.0",
  "bytemuck",
@@ -4544,6 +4572,8 @@ dependencies = [
 [[package]]
 name = "toddy-iced-widget"
 version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77764d8e3899f3499b350991a300cc02803a576854b6a7adfbbc7b76ae98020e"
 dependencies = [
  "log",
  "num-traits",
@@ -4558,6 +4588,8 @@ dependencies = [
 [[package]]
 name = "toddy-iced-winit"
 version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8f7c6c0dd97d9769d5e822855c5f4a180f81566799801cdb1d2276f7a7e612c"
 dependencies = [
  "accesskit",
  "accesskit_winit",
