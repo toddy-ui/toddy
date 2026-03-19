@@ -341,7 +341,7 @@ impl App {
                         }
                         Task::none()
                     }
-                    IncomingMessage::ScreenshotCapture { id, name, .. } => {
+                    IncomingMessage::Screenshot { id, name, .. } => {
                         // Capture real GPU-rendered pixels via iced
                         if let Some((_, &iced_id)) = self.windows.iter().next() {
                             window::screenshot(iced_id).map(move |shot| {

@@ -32,7 +32,7 @@ impl App {
                 }
                 return Ok(());
             }
-            IncomingMessage::ExtensionCommandBatch { commands } => {
+            IncomingMessage::ExtensionCommands { commands } => {
                 for cmd in commands {
                     let events = self.dispatcher.handle_command(
                         &cmd.node_id,

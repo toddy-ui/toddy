@@ -520,10 +520,10 @@ fn handle_message(
     match msg {
         IncomingMessage::Snapshot { .. }
         | IncomingMessage::Patch { .. }
-        | IncomingMessage::EffectRequest { .. }
+        | IncomingMessage::Effect { .. }
         | IncomingMessage::WidgetOp { .. }
-        | IncomingMessage::SubscriptionRegister { .. }
-        | IncomingMessage::SubscriptionUnregister { .. }
+        | IncomingMessage::Subscribe { .. }
+        | IncomingMessage::Unsubscribe { .. }
         | IncomingMessage::WindowOp { .. }
         | IncomingMessage::Settings { .. }
         | IncomingMessage::ImageOp { .. } => {
@@ -668,7 +668,7 @@ fn handle_message(
                 .with_session(session_id);
             s.writer.emit(&resp)?;
         }
-        IncomingMessage::ScreenshotCapture {
+        IncomingMessage::Screenshot {
             id,
             name,
             width,
@@ -708,7 +708,7 @@ fn handle_message(
                 s.writer.emit(&event.with_session(session_id))?;
             }
         }
-        IncomingMessage::ExtensionCommandBatch { commands } => {
+        IncomingMessage::ExtensionCommands { commands } => {
             for cmd in commands {
                 let events = s.dispatcher.handle_command(
                     &cmd.node_id,
@@ -893,7 +893,11 @@ pub(crate) fn run(
     log::info!("wire codec: {codec}");
     Codec::set_global(codec);
 
-    if let Err(e) = crate::renderer::emit_hello() {
+    let mode_str = match mode {
+        Mode::Headless => "headless",
+        Mode::Mock => "mock",
+    };
+    if let Err(e) = crate::renderer::emit_hello(mode_str) {
         log::error!("failed to emit hello: {e}");
         return;
     }

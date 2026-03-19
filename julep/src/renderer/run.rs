@@ -64,7 +64,7 @@ pub(crate) fn run(builder: julep_core::app::JulepAppBuilder) -> iced::Result {
 
     // Send the hello handshake before any other output. The codec is set
     // inside read_initial_settings, so it's safe to emit framed messages now.
-    if let Err(e) = emit_hello() {
+    if let Err(e) = emit_hello("windowed") {
         log::error!("failed to emit hello: {e}");
         return Ok(());
     }

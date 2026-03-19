@@ -2,8 +2,8 @@
 //!
 //! Native GUI renderer binary. Three execution modes:
 //!
-//! - **Default:** `julep` -- Full iced::daemon with real windows and
-//!   GPU rendering. Production mode.
+//! - **Windowed (default):** `julep` -- Full iced rendering with real
+//!   windows and GPU. Production mode. Reports `"mode": "windowed"`.
 //! - **Headless:** `julep --headless` -- No display server. Real
 //!   rendering via tiny-skia with persistent widget state. Accurate
 //!   screenshots after interactions. For CI with visual verification.
@@ -12,7 +12,7 @@
 //!   any language.
 //!
 //! All modes handle scripting messages (Query, Interact, TreeHash,
-//! ScreenshotCapture, Reset) for programmatic inspection and interaction.
+//! Screenshot, Reset) for programmatic inspection and interaction.
 //!
 //! Wire codec auto-detection: the first byte of stdin determines the format
 //! (`{` = JSON, anything else = MessagePack). Override with `--json` or

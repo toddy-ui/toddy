@@ -14,7 +14,7 @@ pub enum IncomingMessage {
     /// Apply incremental changes to the retained UI tree.
     Patch { ops: Vec<PatchOp> },
     /// Request a platform effect (file dialog, clipboard, notification).
-    EffectRequest {
+    Effect {
         id: String,
         kind: String,
         payload: Value,
@@ -26,9 +26,9 @@ pub enum IncomingMessage {
         payload: Value,
     },
     /// Subscribe to a runtime event source (keyboard, mouse, window, etc.).
-    SubscriptionRegister { kind: String, tag: String },
+    Subscribe { kind: String, tag: String },
     /// Unsubscribe from a runtime event source.
-    SubscriptionUnregister { kind: String },
+    Unsubscribe { kind: String },
     /// Perform a window operation (resize, move, close, etc.).
     WindowOp {
         op: String,
@@ -61,7 +61,7 @@ pub enum IncomingMessage {
     TreeHash { id: String, name: String },
     /// Capture a pixel screenshot (GPU-rendered RGBA data).
     #[allow(dead_code)]
-    ScreenshotCapture {
+    Screenshot {
         id: String,
         name: String,
         #[serde(default)]
@@ -96,13 +96,13 @@ pub enum IncomingMessage {
         payload: Value,
     },
     /// A batch of extension commands processed in one cycle.
-    ExtensionCommandBatch { commands: Vec<ExtensionCommandItem> },
+    ExtensionCommands { commands: Vec<ExtensionCommandItem> },
     /// Advance the animation clock by one frame (headless/test mode).
     /// Emits an `animation_frame` event if `on_animation_frame` is subscribed.
     AdvanceFrame { timestamp: u64 },
 }
 
-/// A single item within an `ExtensionCommandBatch`.
+/// A single item within an `ExtensionCommands` batch.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ExtensionCommandItem {
     pub node_id: String,
@@ -258,35 +258,35 @@ mod tests {
     }
 
     #[test]
-    fn deserialize_effect_request() {
-        let json = r#"{"type":"effect_request","id":"e1","kind":"clipboard_read","payload":{}}"#;
+    fn deserialize_effect() {
+        let json = r#"{"type":"effect","id":"e1","kind":"clipboard_read","payload":{}}"#;
         let msg: IncomingMessage = serde_json::from_str(json).unwrap();
         match msg {
-            IncomingMessage::EffectRequest { id, kind, payload } => {
+            IncomingMessage::Effect { id, kind, payload } => {
                 assert_eq!(id, "e1");
                 assert_eq!(kind, "clipboard_read");
                 assert!(payload.is_object());
             }
-            _ => panic!("expected EffectRequest"),
+            _ => panic!("expected Effect"),
         }
     }
 
     #[test]
-    fn deserialize_effect_request_with_payload() {
+    fn deserialize_effect_with_payload() {
         let msg: IncomingMessage = serde_json::from_value(json!({
-            "type": "effect_request",
+            "type": "effect",
             "id": "e2",
             "kind": "clipboard_write",
             "payload": { "text": "copied" }
         }))
         .unwrap();
         match msg {
-            IncomingMessage::EffectRequest { id, kind, payload } => {
+            IncomingMessage::Effect { id, kind, payload } => {
                 assert_eq!(id, "e2");
                 assert_eq!(kind, "clipboard_write");
                 assert_eq!(payload["text"], "copied");
             }
-            _ => panic!("expected EffectRequest"),
+            _ => panic!("expected Effect"),
         }
     }
 
@@ -317,27 +317,27 @@ mod tests {
     }
 
     #[test]
-    fn deserialize_subscription_register() {
-        let json = r#"{"type":"subscription_register","kind":"on_key_press","tag":"keys"}"#;
+    fn deserialize_subscribe() {
+        let json = r#"{"type":"subscribe","kind":"on_key_press","tag":"keys"}"#;
         let msg: IncomingMessage = serde_json::from_str(json).unwrap();
         match msg {
-            IncomingMessage::SubscriptionRegister { kind, tag } => {
+            IncomingMessage::Subscribe { kind, tag } => {
                 assert_eq!(kind, "on_key_press");
                 assert_eq!(tag, "keys");
             }
-            _ => panic!("expected SubscriptionRegister"),
+            _ => panic!("expected Subscribe"),
         }
     }
 
     #[test]
-    fn deserialize_subscription_unregister() {
-        let json = r#"{"type":"subscription_unregister","kind":"on_key_press"}"#;
+    fn deserialize_unsubscribe() {
+        let json = r#"{"type":"unsubscribe","kind":"on_key_press"}"#;
         let msg: IncomingMessage = serde_json::from_str(json).unwrap();
         match msg {
-            IncomingMessage::SubscriptionUnregister { kind } => {
+            IncomingMessage::Unsubscribe { kind } => {
                 assert_eq!(kind, "on_key_press");
             }
-            _ => panic!("expected SubscriptionUnregister"),
+            _ => panic!("expected Unsubscribe"),
         }
     }
 
@@ -444,9 +444,9 @@ mod tests {
     }
 
     #[test]
-    fn extension_command_batch_deserializes() {
+    fn extension_commands_deserializes() {
         let msg: IncomingMessage = serde_json::from_value(json!({
-            "type": "extension_command_batch",
+            "type": "extension_commands",
             "commands": [
                 { "node_id": "term-1", "op": "write", "payload": { "data": "a" } },
                 { "node_id": "log-1", "op": "append", "payload": { "line": "x" } }
@@ -454,7 +454,7 @@ mod tests {
         }))
         .unwrap();
         match msg {
-            IncomingMessage::ExtensionCommandBatch { commands } => {
+            IncomingMessage::ExtensionCommands { commands } => {
                 assert_eq!(commands.len(), 2);
                 assert_eq!(commands[0].node_id, "term-1");
                 assert_eq!(commands[1].op, "append");

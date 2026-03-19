@@ -62,13 +62,14 @@ pub(crate) fn emit_event(event: OutgoingEvent) -> io::Result<()> {
 /// Emit a `hello` handshake message to stdout immediately after codec
 /// negotiation. This tells the host which protocol version and
 /// renderer build it is talking to.
-pub(crate) fn emit_hello() -> io::Result<()> {
+pub(crate) fn emit_hello(mode: &str) -> io::Result<()> {
     let msg = serde_json::json!({
         "type": "hello",
         "session": "",
         "protocol": julep_core::protocol::PROTOCOL_VERSION,
         "version": env!("CARGO_PKG_VERSION"),
         "name": "julep",
+        "mode": mode,
     });
     let codec = Codec::get_global();
     let bytes = codec.encode(&msg).map_err(io::Error::other)?;
@@ -97,7 +98,7 @@ pub(crate) fn emit_query_response(
     data: serde_json::Value,
 ) -> io::Result<()> {
     let msg = serde_json::json!({
-        "type": "widget_query_response",
+        "type": "op_query_response",
         "session": "",
         "kind": kind,
         "tag": tag,

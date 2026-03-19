@@ -176,7 +176,7 @@ impl Core {
                 }
                 effects.push(CoreEffect::SyncWindows);
             }
-            IncomingMessage::EffectRequest { id, kind, payload } => {
+            IncomingMessage::Effect { id, kind, payload } => {
                 log::debug!("effect request: {kind} ({id})");
                 if effects::is_async_effect(&kind) {
                     effects.push(CoreEffect::SpawnAsyncEffect {
@@ -193,7 +193,7 @@ impl Core {
                 log::debug!("widget_op: {op}");
                 effects.push(CoreEffect::WidgetOp { op, payload });
             }
-            IncomingMessage::SubscriptionRegister { kind, tag } => {
+            IncomingMessage::Subscribe { kind, tag } => {
                 log::debug!("subscription register: {kind} -> {tag}");
                 if let Some(old_tag) = self.active_subscriptions.insert(kind.clone(), tag.clone())
                     && old_tag != tag
@@ -204,7 +204,7 @@ impl Core {
                     );
                 }
             }
-            IncomingMessage::SubscriptionUnregister { kind } => {
+            IncomingMessage::Unsubscribe { kind } => {
                 log::debug!("subscription unregister: {kind}");
                 self.active_subscriptions.remove(&kind);
             }
@@ -304,10 +304,8 @@ impl Core {
             IncomingMessage::TreeHash { .. } => {
                 log::debug!("TreeHash message ignored by Core (handled by scripting layer)");
             }
-            IncomingMessage::ScreenshotCapture { .. } => {
-                log::debug!(
-                    "ScreenshotCapture message ignored by Core (handled by scripting layer)"
-                );
+            IncomingMessage::Screenshot { .. } => {
+                log::debug!("Screenshot message ignored by Core (handled by scripting layer)");
             }
             IncomingMessage::Reset { .. } => {
                 log::debug!("Reset message ignored by Core (handled by scripting layer)");
@@ -320,10 +318,8 @@ impl Core {
                     "AdvanceFrame is only supported in headless/test mode; ignored in daemon mode"
                 );
             }
-            IncomingMessage::ExtensionCommandBatch { .. } => {
-                log::debug!(
-                    "ExtensionCommandBatch message ignored by Core (handled by renderer App)"
-                );
+            IncomingMessage::ExtensionCommands { .. } => {
+                log::debug!("ExtensionCommands message ignored by Core (handled by renderer App)");
             }
         }
 
@@ -522,12 +518,12 @@ mod tests {
         );
     }
 
-    // -- SubscriptionRegister / SubscriptionUnregister --
+    // -- Subscribe / Unsubscribe --
 
     #[test]
     fn subscription_register_adds_to_active_subscriptions() {
         let mut core = Core::new();
-        let msg = IncomingMessage::SubscriptionRegister {
+        let msg = IncomingMessage::Subscribe {
             kind: "time".to_string(),
             tag: "tick".to_string(),
         };
@@ -541,7 +537,7 @@ mod tests {
     #[test]
     fn subscription_register_returns_no_effects() {
         let mut core = Core::new();
-        let msg = IncomingMessage::SubscriptionRegister {
+        let msg = IncomingMessage::Subscribe {
             kind: "keyboard".to_string(),
             tag: "key".to_string(),
         };
@@ -554,7 +550,7 @@ mod tests {
         let mut core = Core::new();
         core.active_subscriptions
             .insert("time".to_string(), "tick".to_string());
-        let msg = IncomingMessage::SubscriptionUnregister {
+        let msg = IncomingMessage::Unsubscribe {
             kind: "time".to_string(),
         };
         core.apply(msg);
@@ -564,7 +560,7 @@ mod tests {
     #[test]
     fn subscription_unregister_returns_no_effects() {
         let mut core = Core::new();
-        let msg = IncomingMessage::SubscriptionUnregister {
+        let msg = IncomingMessage::Unsubscribe {
             kind: "time".to_string(),
         };
         let effects = core.apply(msg);

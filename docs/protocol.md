@@ -95,13 +95,24 @@ protocol version:
   "session": "",
   "protocol": 1,
   "version": "0.3.0",
-  "name": "julep"
+  "name": "julep",
+  "mode": "headless"
 }
 ```
 
+| Field | Type | Description |
+|-------|------|-------------|
+| `protocol` | number | Protocol version (currently 1) |
+| `version` | string | Renderer build version |
+| `name` | string | Renderer name (always `"julep"`) |
+| `mode` | string | Execution mode: `"windowed"`, `"headless"`, or `"mock"` |
+
 The host should check that `protocol` matches the version it expects.
-The `session` field on `hello` is always empty -- it is a
-process-level message, not scoped to any session.
+The `mode` field tells the SDK what capabilities are available (e.g.
+headless mode supports `interact_step` round-trips and real
+screenshots; mock mode returns stubs). The `session` field on
+`hello` is always empty -- it is a process-level message, not
+scoped to any session.
 
 ---
 
@@ -277,14 +288,14 @@ Operations are applied sequentially. If one fails (missing fields,
 out-of-bounds path), it is skipped with a warning and subsequent
 operations still apply.
 
-### SubscriptionRegister
+### Subscribe
 
 Subscribe to a category of events. The `tag` is included in events of
 this kind so the host can route them.
 
 ```json
 {
-  "type": "subscription_register",
+  "type": "subscribe",
   "session": "s1",
   "kind": "on_key_press",
   "tag": "my_key_handler"
@@ -319,13 +330,13 @@ this kind so the host can route them.
 both `on_event` and a specific subscription (e.g. `on_key_press`) are
 registered, events are delivered once, not twice.
 
-### SubscriptionUnregister
+### Unsubscribe
 
 Remove a subscription.
 
 ```json
 {
-  "type": "subscription_unregister",
+  "type": "unsubscribe",
   "session": "s1",
   "kind": "on_key_press"
 }
@@ -368,14 +379,14 @@ Perform an operation on a widget (focus, scroll, etc.).
 | `pane_swap` | `target`, `a`, `b` | Swap two panes |
 | `pane_maximize` | `target`, `pane` | Maximize a pane |
 | `pane_restore` | `target` | Restore maximized pane |
-| `tree_hash` | `tag` (optional) | Compute SHA-256 hash of current tree; response via `widget_query_response` |
-| `find_focused` | `tag` (optional) | Find the currently focused widget; response via `widget_query_response` |
+| `tree_hash` | `tag` (optional) | Compute SHA-256 hash of current tree; response via `op_query_response` |
+| `find_focused` | `tag` (optional) | Find the currently focused widget; response via `op_query_response` |
 | `load_font` | `data` (base64 TTF/OTF) | Load a font at runtime |
-| `list_images` | `tag` (optional) | List all image handle names; response via `widget_query_response` |
+| `list_images` | `tag` (optional) | List all image handle names; response via `op_query_response` |
 | `clear_images` | -- | Remove all in-memory image handles |
 
 Widget op query responses (`tree_hash`, `find_focused`, `list_images`)
-use the `widget_query_response` outgoing message type.
+use the `op_query_response` outgoing message type.
 
 ### WindowOp
 
@@ -436,7 +447,7 @@ Manage windows directly (outside of tree-driven sync).
 These accept an optional `request_id` field in settings, echoed
 back in the response for correlation.
 
-**System query operations** (response sent as `widget_query_response`):
+**System query operations** (response sent as `op_query_response`):
 
 | Op | Response kind | Response data |
 |----|---------------|---------------|
@@ -444,16 +455,16 @@ back in the response for correlation.
 | `get_system_info` | `system_info` | CPU, memory, GPU info object |
 
 System queries use a `tag` field in the payload (like widget op
-queries) and produce `widget_query_response` rather than
+queries) and produce `op_query_response` rather than
 `effect_response`.
 
-### EffectRequest
+### Effect
 
 Request a platform effect (file dialog, clipboard, notification).
 
 ```json
 {
-  "type": "effect_request",
+  "type": "effect",
   "session": "s1",
   "id": "req-1",
   "kind": "file_open",
@@ -546,13 +557,13 @@ data to a chart extension).
 }
 ```
 
-### ExtensionCommandBatch
+### ExtensionCommands
 
 Send multiple extension commands in a single message.
 
 ```json
 {
-  "type": "extension_command_batch",
+  "type": "extension_commands",
   "session": "s1",
   "commands": [
     { "node_id": "chart-1", "op": "append_data", "payload": {...} },
@@ -627,7 +638,8 @@ sent via Snapshot.
 ### Interact
 
 Simulate user interactions (click, type, etc.). Available in both
-daemon and headless modes for programmatic inspection and interaction.
+all modes (gui, headless, mock) for programmatic inspection and
+interaction.
 
 ```json
 {
@@ -726,7 +738,7 @@ Single characters (e.g. `"a"`, `"1"`, `"/"`) are sent as character
 key events. Multi-character strings that don't match a named key
 are sent as-is (the renderer does not reject them).
 
-In **daemon mode**, all actions produce synthetic events regardless
+In **windowed mode**, all actions produce synthetic events regardless
 -- the interact protocol is a scripting convenience, not a
 substitute for real user input via iced subscriptions.
 
@@ -781,7 +793,7 @@ as JSON). Used for structural regression testing.
 
 Response: `tree_hash_response`.
 
-### ScreenshotCapture
+### Screenshot
 
 Capture rendered pixels. In headless mode, renders the tree via
 tiny-skia and returns RGBA pixel data. In mock mode, returns an
@@ -789,7 +801,7 @@ empty stub.
 
 ```json
 {
-  "type": "screenshot_capture",
+  "type": "screenshot",
   "session": "s1",
   "id": "sc1",
   "name": "homepage",
@@ -840,7 +852,7 @@ mode.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `timestamp` | number | Frame timestamp, passed through to the `animation_frame` event as-is. By convention, milliseconds (matching the daemon's `Instant::as_millis()` output). |
+| `timestamp` | number | Frame timestamp, passed through to the `animation_frame` event as-is. By convention, milliseconds (matching the windowed mode's `Instant::as_millis()` output). |
 
 ---
 
@@ -856,17 +868,17 @@ Every request message produces exactly one response. The `id` and
 | Query | `query_response` | |
 | Interact | `interact_response` | May be preceded by `interact_step` messages in headless mode |
 | TreeHash | `tree_hash_response` | |
-| ScreenshotCapture | `screenshot_response` | |
+| Screenshot | `screenshot_response` | |
 | Reset | `reset_response` | |
-| EffectRequest | `effect_response` | |
-| WidgetOp (query ops) | `widget_query_response` | tree_hash, find_focused, list_images |
+| Effect | `effect_response` | |
+| WidgetOp (query ops) | `op_query_response` | tree_hash, find_focused, list_images |
 | WindowOp (query ops) | `effect_response` | get_size, get_position, get_mode, etc. |
-| WindowOp (system queries) | `widget_query_response` | get_system_theme, get_system_info |
+| WindowOp (system queries) | `op_query_response` | get_system_theme, get_system_info |
 
 Messages without responses: Settings, Snapshot, Patch,
-SubscriptionRegister, SubscriptionUnregister, WidgetOp
+Subscribe, Unsubscribe, WidgetOp
 (non-query), WindowOp (non-query), ImageOp, ExtensionCommand,
-ExtensionCommandBatch, AdvanceFrame.
+ExtensionCommands, AdvanceFrame.
 
 ### event
 
@@ -1023,7 +1035,7 @@ tag from the subscription registration.
 
 ### effect_response
 
-Response to an EffectRequest.
+Response to an Effect.
 
 ```json
 {
@@ -1072,14 +1084,14 @@ Response to a Query message.
 | `target` | string | Echoes the query target |
 | `data` | any | Query result (node object for find, full tree for tree, null if not found) |
 
-### widget_query_response
+### op_query_response
 
 Response to widget op queries (`tree_hash`, `find_focused`,
 `list_images`, `system_theme`, `system_info`).
 
 ```json
 {
-  "type": "widget_query_response",
+  "type": "op_query_response",
   "session": "s1",
   "kind": "find_focused",
   "tag": "focus_check",
@@ -1178,7 +1190,7 @@ Response to a TreeHash message.
 
 ### screenshot_response
 
-Response to a ScreenshotCapture message.
+Response to a Screenshot message.
 
 ```json
 {
@@ -1232,7 +1244,7 @@ Response to a Reset message.
 The renderer runs in one of three modes, selected by CLI flags.
 Behaviour differences that affect SDK implementations:
 
-### Default (daemon) mode
+### Windowed mode (default, `"mode": "windowed"`)
 
 Full iced rendering with real windows. Production mode.
 
@@ -1241,23 +1253,23 @@ Full iced rendering with real windows. Production mode.
 - Subscriptions emit real events from the window system.
 - Effects (file dialogs, clipboard) execute natively.
 
-### Headless mode (`--headless`)
+### Headless mode (`--headless`, `"mode": "headless"`)
 
 Real rendering via tiny-skia. No display server required.
 
 - Interact injects real iced events and captures widget output.
   May emit `interact_step` messages requiring snapshot round-trips.
-- ScreenshotCapture returns real RGBA pixel data.
+- Screenshot returns real RGBA pixel data.
 - Effects always return `"cancelled"` status (no platform dialogs).
 - Subscriptions work (events emitted on registration match).
 - Window operations are no-ops (no real windows).
 
-### Mock mode (`--mock`)
+### Mock mode (`--mock`, `"mode": "mock"`)
 
 No rendering. Protocol-only. Fastest mode for testing.
 
 - Interact always produces synthetic events. No `interact_step`.
-- ScreenshotCapture returns an empty stub (hash `""`, no rgba).
+- Screenshot returns an empty stub (hash `""`, no rgba).
 - Effects always return `"cancelled"` status.
 - Subscriptions register/unregister but no events are emitted.
 - Window operations and widget operations (focus, scroll) are no-ops.
@@ -1312,6 +1324,30 @@ stderr but do not crash the process.
   returns empty events.
 - **Broken stdout pipe**: Renderer exits cleanly.
 - **Protocol version mismatch**: Renderer exits on startup.
+
+---
+
+## Message pipelining
+
+The host can send multiple messages without waiting for responses.
+The renderer processes messages sequentially within each session,
+so responses arrive in the order requests were sent.
+
+Fire-and-forget messages (Settings, Snapshot, Patch, Subscribe,
+Unsubscribe, WidgetOp, WindowOp, ImageOp, ExtensionCommand,
+ExtensionCommands, AdvanceFrame) can be sent freely at any time.
+
+Request messages (Query, Interact, TreeHash, Screenshot, Reset,
+Effect) can also be pipelined -- the renderer queues them and
+responds in order.
+
+**Exception: interact steps.** During an Interact in headless mode,
+the renderer may emit `interact_step` messages. When this happens,
+the host **must** send a Snapshot or Patch back before the renderer
+will continue to the next iced event. Do not send other messages
+to the same session between an `interact_step` and the
+corresponding Snapshot -- the renderer is blocked waiting for the
+tree update.
 
 ---
 
