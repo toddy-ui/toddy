@@ -2036,258 +2036,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "julep"
-version = "0.3.0"
-dependencies = [
- "base64",
- "env_logger",
- "julep-core",
- "julep-iced",
- "julep-iced-test",
- "log",
- "serde",
- "serde_json",
- "sha2",
- "tokio",
-]
-
-[[package]]
-name = "julep-core"
-version = "0.3.0"
-dependencies = [
- "arboard",
- "base64",
- "julep-iced",
- "log",
- "notify-rust",
- "qrcode",
- "rfd",
- "rmp-serde",
- "rmpv",
- "serde",
- "serde_json",
- "sha2",
- "tokio",
-]
-
-[[package]]
-name = "julep-iced"
-version = "0.6.1"
-dependencies = [
- "image",
- "julep-iced-core",
- "julep-iced-debug",
- "julep-iced-futures",
- "julep-iced-highlighter",
- "julep-iced-renderer",
- "julep-iced-runtime",
- "julep-iced-widget",
- "julep-iced-winit",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "julep-iced-core"
-version = "0.6.1"
-dependencies = [
- "bitflags 2.11.0",
- "bytes",
- "glam",
- "lilt",
- "log",
- "num-traits",
- "rustc-hash 2.1.1",
- "smol_str 0.2.2",
- "thiserror 2.0.18",
- "web-time",
-]
-
-[[package]]
-name = "julep-iced-cryoglyph"
-version = "0.6.1"
-dependencies = [
- "cosmic-text",
- "etagere",
- "lru",
- "rustc-hash 2.1.1",
- "wgpu",
-]
-
-[[package]]
-name = "julep-iced-debug"
-version = "0.6.1"
-dependencies = [
- "julep-iced-core",
- "julep-iced-futures",
- "log",
-]
-
-[[package]]
-name = "julep-iced-futures"
-version = "0.6.1"
-dependencies = [
- "futures",
- "julep-iced-core",
- "log",
- "rustc-hash 2.1.1",
- "tokio",
- "wasm-bindgen-futures",
- "wasmtimer",
-]
-
-[[package]]
-name = "julep-iced-graphics"
-version = "0.6.1"
-dependencies = [
- "bitflags 2.11.0",
- "bytemuck",
- "cosmic-text",
- "half",
- "image",
- "julep-iced-core",
- "julep-iced-futures",
- "kamadak-exif",
- "log",
- "lyon_path",
- "raw-window-handle",
- "rustc-hash 2.1.1",
- "thiserror 2.0.18",
- "unicode-segmentation",
-]
-
-[[package]]
-name = "julep-iced-highlighter"
-version = "0.6.1"
-dependencies = [
- "julep-iced-core",
- "two-face",
-]
-
-[[package]]
-name = "julep-iced-program"
-version = "0.6.1"
-dependencies = [
- "julep-iced-graphics",
- "julep-iced-runtime",
-]
-
-[[package]]
-name = "julep-iced-renderer"
-version = "0.6.1"
-dependencies = [
- "julep-iced-graphics",
- "julep-iced-tiny-skia",
- "julep-iced-wgpu",
- "log",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "julep-iced-runtime"
-version = "0.6.1"
-dependencies = [
- "bytes",
- "julep-iced-core",
- "julep-iced-futures",
- "raw-window-handle",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "julep-iced-selector"
-version = "0.6.1"
-dependencies = [
- "julep-iced-core",
-]
-
-[[package]]
-name = "julep-iced-test"
-version = "0.6.1"
-dependencies = [
- "julep-iced-futures",
- "julep-iced-program",
- "julep-iced-renderer",
- "julep-iced-runtime",
- "julep-iced-selector",
- "nom",
- "png 0.18.1",
- "sha2",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "julep-iced-tiny-skia"
-version = "0.6.1"
-dependencies = [
- "bytemuck",
- "cosmic-text",
- "julep-iced-debug",
- "julep-iced-graphics",
- "kurbo 0.10.4",
- "log",
- "resvg",
- "rustc-hash 2.1.1",
- "softbuffer",
- "tiny-skia",
-]
-
-[[package]]
-name = "julep-iced-wgpu"
-version = "0.6.1"
-dependencies = [
- "bitflags 2.11.0",
- "bytemuck",
- "futures",
- "glam",
- "guillotiere",
- "julep-iced-cryoglyph",
- "julep-iced-debug",
- "julep-iced-graphics",
- "log",
- "lyon",
- "resvg",
- "rustc-hash 2.1.1",
- "thiserror 2.0.18",
- "wgpu",
-]
-
-[[package]]
-name = "julep-iced-widget"
-version = "0.6.1"
-dependencies = [
- "julep-iced-highlighter",
- "julep-iced-renderer",
- "log",
- "num-traits",
- "pulldown-cmark",
- "rustc-hash 2.1.1",
- "thiserror 2.0.18",
- "unicode-segmentation",
-]
-
-[[package]]
-name = "julep-iced-winit"
-version = "0.6.1"
-dependencies = [
- "accesskit",
- "accesskit_winit",
- "arboard",
- "julep-iced-debug",
- "julep-iced-program",
- "julep-iced-runtime",
- "log",
- "mundy",
- "objc2 0.5.2",
- "rustc-hash 2.1.1",
- "sysinfo",
- "thiserror 2.0.18",
- "tracing",
- "wasm-bindgen-futures",
- "web-sys",
- "winit",
-]
-
-[[package]]
 name = "kamadak-exif"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4576,6 +4324,258 @@ name = "tinyvec_macros"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
+
+[[package]]
+name = "toddy"
+version = "0.3.0"
+dependencies = [
+ "base64",
+ "env_logger",
+ "log",
+ "serde",
+ "serde_json",
+ "sha2",
+ "toddy-core",
+ "toddy-iced",
+ "toddy-iced-test",
+ "tokio",
+]
+
+[[package]]
+name = "toddy-core"
+version = "0.3.0"
+dependencies = [
+ "arboard",
+ "base64",
+ "log",
+ "notify-rust",
+ "qrcode",
+ "rfd",
+ "rmp-serde",
+ "rmpv",
+ "serde",
+ "serde_json",
+ "sha2",
+ "toddy-iced",
+ "tokio",
+]
+
+[[package]]
+name = "toddy-iced"
+version = "0.6.1"
+dependencies = [
+ "image",
+ "thiserror 2.0.18",
+ "toddy-iced-core",
+ "toddy-iced-debug",
+ "toddy-iced-futures",
+ "toddy-iced-highlighter",
+ "toddy-iced-renderer",
+ "toddy-iced-runtime",
+ "toddy-iced-widget",
+ "toddy-iced-winit",
+]
+
+[[package]]
+name = "toddy-iced-core"
+version = "0.6.1"
+dependencies = [
+ "bitflags 2.11.0",
+ "bytes",
+ "glam",
+ "lilt",
+ "log",
+ "num-traits",
+ "rustc-hash 2.1.1",
+ "smol_str 0.2.2",
+ "thiserror 2.0.18",
+ "web-time",
+]
+
+[[package]]
+name = "toddy-iced-cryoglyph"
+version = "0.6.1"
+dependencies = [
+ "cosmic-text",
+ "etagere",
+ "lru",
+ "rustc-hash 2.1.1",
+ "wgpu",
+]
+
+[[package]]
+name = "toddy-iced-debug"
+version = "0.6.1"
+dependencies = [
+ "log",
+ "toddy-iced-core",
+ "toddy-iced-futures",
+]
+
+[[package]]
+name = "toddy-iced-futures"
+version = "0.6.1"
+dependencies = [
+ "futures",
+ "log",
+ "rustc-hash 2.1.1",
+ "toddy-iced-core",
+ "tokio",
+ "wasm-bindgen-futures",
+ "wasmtimer",
+]
+
+[[package]]
+name = "toddy-iced-graphics"
+version = "0.6.1"
+dependencies = [
+ "bitflags 2.11.0",
+ "bytemuck",
+ "cosmic-text",
+ "half",
+ "image",
+ "kamadak-exif",
+ "log",
+ "lyon_path",
+ "raw-window-handle",
+ "rustc-hash 2.1.1",
+ "thiserror 2.0.18",
+ "toddy-iced-core",
+ "toddy-iced-futures",
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "toddy-iced-highlighter"
+version = "0.6.1"
+dependencies = [
+ "toddy-iced-core",
+ "two-face",
+]
+
+[[package]]
+name = "toddy-iced-program"
+version = "0.6.1"
+dependencies = [
+ "toddy-iced-graphics",
+ "toddy-iced-runtime",
+]
+
+[[package]]
+name = "toddy-iced-renderer"
+version = "0.6.1"
+dependencies = [
+ "log",
+ "thiserror 2.0.18",
+ "toddy-iced-graphics",
+ "toddy-iced-tiny-skia",
+ "toddy-iced-wgpu",
+]
+
+[[package]]
+name = "toddy-iced-runtime"
+version = "0.6.1"
+dependencies = [
+ "bytes",
+ "raw-window-handle",
+ "thiserror 2.0.18",
+ "toddy-iced-core",
+ "toddy-iced-futures",
+]
+
+[[package]]
+name = "toddy-iced-selector"
+version = "0.6.1"
+dependencies = [
+ "toddy-iced-core",
+]
+
+[[package]]
+name = "toddy-iced-test"
+version = "0.6.1"
+dependencies = [
+ "nom",
+ "png 0.18.1",
+ "sha2",
+ "thiserror 2.0.18",
+ "toddy-iced-futures",
+ "toddy-iced-program",
+ "toddy-iced-renderer",
+ "toddy-iced-runtime",
+ "toddy-iced-selector",
+]
+
+[[package]]
+name = "toddy-iced-tiny-skia"
+version = "0.6.1"
+dependencies = [
+ "bytemuck",
+ "cosmic-text",
+ "kurbo 0.10.4",
+ "log",
+ "resvg",
+ "rustc-hash 2.1.1",
+ "softbuffer",
+ "tiny-skia",
+ "toddy-iced-debug",
+ "toddy-iced-graphics",
+]
+
+[[package]]
+name = "toddy-iced-wgpu"
+version = "0.6.1"
+dependencies = [
+ "bitflags 2.11.0",
+ "bytemuck",
+ "futures",
+ "glam",
+ "guillotiere",
+ "log",
+ "lyon",
+ "resvg",
+ "rustc-hash 2.1.1",
+ "thiserror 2.0.18",
+ "toddy-iced-cryoglyph",
+ "toddy-iced-debug",
+ "toddy-iced-graphics",
+ "wgpu",
+]
+
+[[package]]
+name = "toddy-iced-widget"
+version = "0.6.1"
+dependencies = [
+ "log",
+ "num-traits",
+ "pulldown-cmark",
+ "rustc-hash 2.1.1",
+ "thiserror 2.0.18",
+ "toddy-iced-highlighter",
+ "toddy-iced-renderer",
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "toddy-iced-winit"
+version = "0.6.1"
+dependencies = [
+ "accesskit",
+ "accesskit_winit",
+ "arboard",
+ "log",
+ "mundy",
+ "objc2 0.5.2",
+ "rustc-hash 2.1.1",
+ "sysinfo",
+ "thiserror 2.0.18",
+ "toddy-iced-debug",
+ "toddy-iced-program",
+ "toddy-iced-runtime",
+ "tracing",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "winit",
+]
 
 [[package]]
 name = "tokio"

@@ -1,6 +1,6 @@
-# julep
+# toddy
 
-Rust renderer binary for Julep. Receives UI tree diffs over stdin
+Rust renderer binary for Toddy. Receives UI tree diffs over stdin
 (MessagePack or JSONL), renders them via iced, and sends events back
 over stdout.
 
@@ -35,8 +35,8 @@ cargo fmt                          # auto-format
 cargo fmt --check                  # check formatting
 cargo clippy -- -D warnings        # lint
 # Environment variables (not commands):
-RUST_LOG=julep=debug               # verbose binary logging
-RUST_LOG=julep_core=debug          # verbose core library logging
+RUST_LOG=toddy=debug               # verbose binary logging
+RUST_LOG=toddy_core=debug          # verbose core library logging
 ```
 
 Nextest config: `.config/nextest.toml` (slow-timeout, CI profile).
@@ -44,7 +44,7 @@ Nextest config: `.config/nextest.toml` (slow-timeout, CI profile).
 ## Project layout
 
 ```
-julep-core/          # library crate (the SDK for extensions)
+toddy-core/          # library crate (the SDK for extensions)
   src/
     lib.rs               # public re-exports and module guide
     engine.rs            # Core struct: pure state management decoupled from iced
@@ -74,13 +74,13 @@ julep-core/          # library crate (the SDK for extensions)
     effects.rs           # platform effect handlers (file dialogs, clipboard, notifications)
     image_registry.rs    # in-memory image handle storage
     extensions.rs        # WidgetExtension trait, ExtensionDispatcher, ExtensionCaches
-    app.rs               # JulepAppBuilder for registering extensions
+    app.rs               # ToddyAppBuilder for registering extensions
     prop_helpers.rs      # public prop extraction helpers for extensions
     prelude.rs           # common re-exports for extension authors
     testing.rs           # test factory helpers for extension authors
-julep/               # binary crate (thin main + iced daemon)
+toddy/               # binary crate (thin main + iced daemon)
   src/
-    main.rs              # binary entrypoint (delegates to julep::run)
+    main.rs              # binary entrypoint (delegates to toddy::run)
     lib.rs               # crate-level module declarations (three execution modes)
     renderer/            # iced::daemon App and supporting modules
       mod.rs             # module declarations and re-exports
@@ -94,15 +94,15 @@ julep/               # binary crate (thin main + iced daemon)
       emitters.rs        # stdout emitters for events, handshake, effects, queries, screenshots
       stdin.rs           # stdin I/O: initial settings reader, background thread, subscription
       window_ops.rs      # window operations: open, close, resize, move, maximize, etc.
-      window_map.rs      # bidirectional julep ID <-> iced window::Id mapping
+      window_map.rs      # bidirectional toddy ID <-> iced window::Id mapping
       widget_ops.rs      # widget operations: focus, scroll, cursor, pane, font, images
       constants.rs       # string constants for subscription keys and protocol values
     headless.rs          # headless and mock modes (--headless, --mock) with session multiplexing
     scripting.rs         # scripting protocol helpers, iced event construction, tree search
 ```
 
-julep-core is the public SDK. Extension authors depend on it to implement
-the `WidgetExtension` trait. julep is a thin binary that wires
+toddy-core is the public SDK. Extension authors depend on it to implement
+the `WidgetExtension` trait. toddy is a thin binary that wires
 everything together and runs `iced::daemon`.
 
 ## Architecture
@@ -119,7 +119,7 @@ everything together and runs `iced::daemon`.
   incrementally. The widget mapper in `widgets/` walks the tree and
   maps each node type to an iced widget.
 - **Multi-window.** The host drives window open/close via tree nodes. The
-  renderer maintains bidirectional `julep_id <-> window::Id` maps.
+  renderer maintains bidirectional `toddy_id <-> window::Id` maps.
 - **Three modes.** Windowed (default, full iced rendering with real
   windows), `--headless` (real rendering via tiny-skia, no display
   server), `--mock` (protocol-only, no rendering, stub screenshots).
@@ -157,10 +157,10 @@ via `cache.draw()`. Background is drawn uncached (single fill).
 handler.
 
 **Window sync.** The host detects window nodes in the tree and sends open/close
-ops. The renderer maintains bidirectional `julep_id <-> window::Id` maps.
+ops. The renderer maintains bidirectional `toddy_id <-> window::Id` maps.
 `iced::daemon` was chosen over `iced::application` because it provides
 per-window `view(window_id)`, doesn't force a default window, and keeps
-running when all windows are closed (important for julep's stdin-driven model).
+running when all windows are closed (important for toddy's stdin-driven model).
 
 **Headless event capture.** In `--headless` mode, Interact messages
 inject iced events one at a time and capture the Messages that widgets
@@ -195,7 +195,7 @@ into `Vec<u8>` by a custom deserializer in `protocol.rs`. This is in
 goes to stderr. The renderer's built-in default level is `warn`. Control via
 `RUST_LOG` env var (always wins) or a host-side log level option that sets
 `RUST_LOG` on the process environment. Per-module filtering works:
-`RUST_LOG=julep_core::widgets=debug`.
+`RUST_LOG=toddy_core::widgets=debug`.
 
 **A11y auto-inference.** Image and SVG widgets with an `alt` prop
 automatically flow the alt text into the accessible label. Text input and
@@ -248,27 +248,27 @@ a `hello` message on stdout confirming the protocol version and wire
 codec. The host validates the protocol version to ensure compatibility.
 See `docs/protocol.md` for the full specification.
 
-## iced fork (julep-iced)
+## iced fork (toddy-iced)
 
 The renderer depends on a fork of iced. Cargo.toml dependencies use
-`package = "julep-iced"` aliases so source code still writes `use iced::*`.
-The fork source lives at `~/projects/julep-iced`. The workspace `Cargo.toml`
+`package = "toddy-iced"` aliases so source code still writes `use iced::*`.
+The fork source lives at `~/projects/toddy-iced`. The workspace `Cargo.toml`
 has `[patch.crates-io]` entries pointing at the local checkout for
 development against unpublished fork changes. Remove the patch section
 when publishing to crates.io.
 
 ## Extension development
 
-julep-core is the SDK for writing widget extensions. A native extension
-has two halves: an Elixir module using `Julep.Extension` (declares
+toddy-core is the SDK for writing widget extensions. A native extension
+has two halves: an Elixir module using `Toddy.Extension` (declares
 props, commands, Rust crate path) and a Rust crate implementing
 `WidgetExtension`. Pure Elixir composite widgets use the same macro
 but skip the Rust side.
 
 Rust-side extension authors:
 
-1. Create a Rust crate that depends on `julep-core`.
-2. Implement the `WidgetExtension` trait from `julep_core::prelude::*`.
+1. Create a Rust crate that depends on `toddy-core`.
+2. Implement the `WidgetExtension` trait from `toddy_core::prelude::*`.
 3. Three required methods: `type_names()`, `config_key()`, `render()`.
 4. Optional methods: `init()`, `prepare()`, `handle_event()`,
    `handle_command()`, `cleanup()`, `new_instance()`.
@@ -282,11 +282,11 @@ The `prelude` module re-exports everything an extension needs: `TreeNode`,
 `ExtensionCaches`, `GenerationCounter`, prop helpers, and common iced types.
 
 For iced types not in the prelude (e.g. `canvas::Path`, advanced layout
-widgets), use `julep_core::iced::*` instead of adding a direct `iced`
-dependency. This avoids version conflicts -- when julep-core bumps its
+widgets), use `toddy_core::iced::*` instead of adding a direct `iced`
+dependency. This avoids version conflicts -- when toddy-core bumps its
 iced version, extensions get the upgrade automatically.
 
-The `julep_core::testing` module (`julep-core/src/testing.rs`) provides
+The `toddy_core::testing` module (`toddy-core/src/testing.rs`) provides
 test factory helpers: `node()`, `node_with_props()`, `node_with_children()`,
 and render context builders so extension tests don't need to import half
 the crate.
@@ -298,4 +298,4 @@ accesskit integration themselves. Hosts set a11y props on extension
 nodes the same way as built-in widgets.
 
 See the `WidgetExtension` trait documentation and examples in
-`julep-core/src/extensions.rs` for the full API reference.
+`toddy-core/src/extensions.rs` for the full API reference.

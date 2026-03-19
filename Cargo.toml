@@ -1,5 +1,5 @@
 [workspace]
-members = ["julep-core", "julep"]
+members = ["toddy-core", "toddy"]
 resolver = "2"
 
 [workspace.package]
@@ -7,20 +7,20 @@ version = "0.3.0"
 edition = "2024"
 rust-version = "1.92"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/julep-ui/julep"
+repository = "https://github.com/toddy-ui/toddy"
 authors = ["Daniel Hedlund <daniel@digitree.org>"]
 keywords = ["gui", "desktop", "renderer", "native", "iced"]
 categories = ["gui", "rendering"]
 
 [patch.crates-io]
-julep-iced = { path = "../julep-iced" }
-julep-iced-core = { path = "../julep-iced/core" }
-julep-iced-futures = { path = "../julep-iced/futures" }
-julep-iced-renderer = { path = "../julep-iced/renderer" }
-julep-iced-runtime = { path = "../julep-iced/runtime" }
-julep-iced-widget = { path = "../julep-iced/widget" }
-julep-iced-winit = { path = "../julep-iced/winit" }
-julep-iced-wgpu = { path = "../julep-iced/wgpu" }
-julep-iced-tiny-skia = { path = "../julep-iced/tiny_skia" }
-julep-iced-test = { path = "../julep-iced/test" }
-julep-iced-highlighter = { path = "../julep-iced/highlighter" }
+toddy-iced = { path = "../toddy-iced" }
+toddy-iced-core = { path = "../toddy-iced/core" }
+toddy-iced-futures = { path = "../toddy-iced/futures" }
+toddy-iced-renderer = { path = "../toddy-iced/renderer" }
+toddy-iced-runtime = { path = "../toddy-iced/runtime" }
+toddy-iced-widget = { path = "../toddy-iced/widget" }
+toddy-iced-winit = { path = "../toddy-iced/winit" }
+toddy-iced-wgpu = { path = "../toddy-iced/wgpu" }
+toddy-iced-tiny-skia = { path = "../toddy-iced/tiny_skia" }
+toddy-iced-test = { path = "../toddy-iced/test" }
+toddy-iced-highlighter = { path = "../toddy-iced/highlighter" }

@@ -95,7 +95,7 @@ protocol version:
   "session": "",
   "protocol": 1,
   "version": "0.3.0",
-  "name": "julep",
+  "name": "toddy",
   "mode": "headless"
 }
 ```
@@ -104,7 +104,7 @@ protocol version:
 |-------|------|-------------|
 | `protocol` | number | Protocol version (currently 1) |
 | `version` | string | Renderer build version |
-| `name` | string | Renderer name (always `"julep"`) |
+| `name` | string | Renderer name (always `"toddy"`) |
 | `mode` | string | Execution mode: `"windowed"`, `"headless"`, or `"mock"` |
 
 The host should check that `protocol` matches the version it expects.
