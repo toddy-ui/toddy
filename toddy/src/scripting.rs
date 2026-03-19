@@ -722,8 +722,8 @@ pub(crate) fn handle_tree_hash(core: &Core, id: String, name: String) -> io::Res
 #[allow(unused_must_use)]
 mod tests {
     use super::*;
-    use toddy_core::protocol::TreeNode;
     use serde_json::json;
+    use toddy_core::protocol::TreeNode;
 
     fn make_node(id: &str, type_name: &str) -> TreeNode {
         TreeNode {

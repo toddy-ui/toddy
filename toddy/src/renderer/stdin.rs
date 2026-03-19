@@ -8,10 +8,10 @@ use std::thread;
 use iced::futures::SinkExt;
 use iced::stream;
 
+use serde_json::Value;
 use toddy_core::codec::Codec;
 use toddy_core::message::StdinEvent;
 use toddy_core::protocol::IncomingMessage;
-use serde_json::Value;
 
 /// Emit an error message to stdout and exit the process. Used for
 /// fatal startup failures (decode error, protocol version mismatch)
