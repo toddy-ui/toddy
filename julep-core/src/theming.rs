@@ -230,34 +230,12 @@ fn get_color(obj: &serde_json::Map<String, Value>, key: &str) -> Option<Color> {
 
 /// Parse a hex color string into an iced Color.
 ///
-/// Accepts 3-char (#rgb), 4-char (#rgba), 6-char (#rrggbb), and 8-char
-/// (#rrggbbaa) hex strings with or without leading `#`.
+/// Accepts 6-char (`#rrggbb`) and 8-char (`#rrggbbaa`) hex strings
+/// with or without leading `#`. Short forms (`#rgb`, `#rgba`) are not
+/// accepted -- the host normalizes to canonical hex before sending.
 pub fn parse_hex_color(hex: &str) -> Option<Color> {
     let hex = hex.trim_start_matches('#');
     match hex.len() {
-        3 => {
-            let mut expanded = String::with_capacity(6);
-            for c in hex.chars() {
-                expanded.push(c);
-                expanded.push(c);
-            }
-            let r = u8::from_str_radix(&expanded[0..2], 16).ok()?;
-            let g = u8::from_str_radix(&expanded[2..4], 16).ok()?;
-            let b = u8::from_str_radix(&expanded[4..6], 16).ok()?;
-            Some(Color::from_rgb8(r, g, b))
-        }
-        4 => {
-            let mut expanded = String::with_capacity(8);
-            for c in hex.chars() {
-                expanded.push(c);
-                expanded.push(c);
-            }
-            let r = u8::from_str_radix(&expanded[0..2], 16).ok()?;
-            let g = u8::from_str_radix(&expanded[2..4], 16).ok()?;
-            let b = u8::from_str_radix(&expanded[4..6], 16).ok()?;
-            let a = u8::from_str_radix(&expanded[6..8], 16).ok()?;
-            Some(Color::from_rgba8(r, g, b, a as f32 / 255.0))
-        }
         6 => {
             let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
             let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
@@ -379,15 +357,10 @@ mod tests {
     }
 
     #[test]
-    fn parse_hex_color_3char() {
-        let c = parse_hex_color("#f80").unwrap();
-        assert_eq!(c, Color::from_rgb8(0xff, 0x88, 0x00));
-    }
-
-    #[test]
-    fn parse_hex_color_4char() {
-        let c = parse_hex_color("#f808").unwrap();
-        assert_eq!(c, Color::from_rgba8(0xff, 0x88, 0x00, 0x88 as f32 / 255.0));
+    fn parse_hex_color_rejects_short_forms() {
+        // Short hex (#rgb, #rgba) must be normalized by the host.
+        assert!(parse_hex_color("#f80").is_none());
+        assert!(parse_hex_color("#f808").is_none());
     }
 
     #[test]

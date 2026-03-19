@@ -116,6 +116,20 @@ scoped to any session.
 
 ---
 
+## Common value types
+
+**Colors** are canonical hex strings: `"#rrggbb"` (6-char) or
+`"#rrggbbaa"` (8-char with alpha). Short forms (`#rgb`, `#rgba`)
+are not accepted -- the host must normalize before sending.
+
+**Lengths** are numbers (pixels), `"fill"`, `"shrink"`, or
+`{"fill_portion": n}`.
+
+**Padding** is a number (uniform), `[vertical, horizontal]`, or
+`[top, right, bottom, left]`.
+
+---
+
 ## Tree nodes
 
 A UI tree is a nested structure of nodes. Every node has four fields:
