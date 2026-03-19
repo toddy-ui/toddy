@@ -49,10 +49,13 @@ pub(crate) fn render_button<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Eleme
         prop_bool_default(props, "disabled", false) || !prop_bool_default(props, "enabled", true);
 
     let mut b = button(child)
-        .padding(padding)
         .width(width)
         .height(height)
         .clip(clip);
+
+    if let Some(p) = padding {
+        b = b.padding(p);
+    }
 
     if !disabled {
         b = b.on_press(Message::Click(id));
@@ -352,11 +355,13 @@ pub(crate) fn render_window<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Eleme
         .map(|c| ctx.render_child(c))
         .unwrap_or_else(|| Space::new().into());
 
-    container(child)
-        .padding(padding)
-        .width(width)
-        .height(height)
-        .into()
+    let mut c = container(child).width(width).height(height);
+
+    if let Some(p) = padding {
+        c = c.padding(p);
+    }
+
+    c.into()
 }
 
 // ---------------------------------------------------------------------------

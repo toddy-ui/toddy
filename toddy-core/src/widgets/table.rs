@@ -70,11 +70,11 @@ pub(crate) fn render_table<'a>(node: &'a TreeNode, _ctx: RenderCtx<'a>) -> Eleme
     let padding_val = parse_padding_value(props);
     let table_id = node.id.clone();
 
-    let header_text_size = prop_f32(props, "header_text_size").unwrap_or(14.0);
-    let row_text_size = prop_f32(props, "row_text_size").unwrap_or(13.0);
+    let header_text_size = prop_f32(props, "header_text_size");
+    let row_text_size = prop_f32(props, "row_text_size");
 
-    let cell_spacing = prop_f32(props, "cell_spacing").unwrap_or(4.0);
-    let row_spacing = prop_f32(props, "row_spacing").unwrap_or(2.0);
+    let cell_spacing = prop_f32(props, "cell_spacing");
+    let row_spacing = prop_f32(props, "row_spacing");
     let separator_thickness = prop_f32(props, "separator_thickness").unwrap_or(1.0);
     let separator_color = prop_color(props, "separator_color");
 
@@ -117,8 +117,12 @@ pub(crate) fn render_table<'a>(node: &'a TreeNode, _ctx: RenderCtx<'a>) -> Eleme
                 if col.sortable {
                     let click_id = table_id.clone();
                     let click_key = col.key.clone();
+                    let mut label = text(label_text);
+                    if let Some(sz) = header_text_size {
+                        label = label.size(sz);
+                    }
                     container(
-                        button(text(label_text).size(header_text_size))
+                        button(label)
                             .on_press(Message::Event {
                                 id: click_id,
                                 data: serde_json::json!({"column": click_key}),
@@ -130,14 +134,21 @@ pub(crate) fn render_table<'a>(node: &'a TreeNode, _ctx: RenderCtx<'a>) -> Eleme
                     .align_x(col.align)
                     .into()
                 } else {
-                    container(text(label_text).size(header_text_size))
+                    let mut label = text(label_text);
+                    if let Some(sz) = header_text_size {
+                        label = label.size(sz);
+                    }
+                    container(label)
                         .width(col.width)
                         .align_x(col.align)
                         .into()
                 }
             })
             .collect();
-        let header = row(header_cells).spacing(cell_spacing).width(Fill);
+        let mut header = row(header_cells).width(Fill);
+        if let Some(cs) = cell_spacing {
+            header = header.spacing(cs);
+        }
         table_rows.push(header.into());
 
         // Separator
@@ -171,20 +182,32 @@ pub(crate) fn render_table<'a>(node: &'a TreeNode, _ctx: RenderCtx<'a>) -> Eleme
                         other => other.to_string(),
                     })
                     .unwrap_or_default();
-                container(text(cell_text).size(row_text_size))
+                let mut cell = text(cell_text);
+                if let Some(sz) = row_text_size {
+                    cell = cell.size(sz);
+                }
+                container(cell)
                     .width(col.width)
                     .align_x(col.align)
                     .into()
             })
             .collect();
-        table_rows.push(row(cells).spacing(cell_spacing).width(Fill).into());
+        let mut data_row_elem = row(cells).width(Fill);
+        if let Some(cs) = cell_spacing {
+            data_row_elem = data_row_elem.spacing(cs);
+        }
+        table_rows.push(data_row_elem.into());
     }
 
-    scrollable(
-        column(table_rows)
-            .spacing(row_spacing)
-            .width(width)
-            .padding(padding_val),
-    )
-    .into()
+    let mut table_col = column(table_rows).width(width);
+
+    if let Some(rs) = row_spacing {
+        table_col = table_col.spacing(rs);
+    }
+
+    if let Some(p) = padding_val {
+        table_col = table_col.padding(p);
+    }
+
+    scrollable(table_col).into()
 }

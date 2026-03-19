@@ -34,7 +34,7 @@ use crate::protocol::TreeNode;
 
 pub(crate) fn render_column<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     let props = node.props.as_object();
-    let spacing = prop_f32(props, "spacing").unwrap_or(0.0);
+    let spacing = prop_f32(props, "spacing");
     let padding = parse_padding_value(props);
     let width = prop_length(props, "width", Length::Shrink);
     let height = prop_length(props, "height", Length::Shrink);
@@ -44,12 +44,17 @@ pub(crate) fn render_column<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Eleme
     let children = ctx.render_children(node);
 
     let mut col = column(children)
-        .spacing(spacing)
-        .padding(padding)
         .width(width)
         .height(height)
         .align_x(align_x)
         .clip(clip);
+
+    if let Some(s) = spacing {
+        col = col.spacing(s);
+    }
+    if let Some(p) = padding {
+        col = col.padding(p);
+    }
 
     if let Some(mw) = prop_f32(props, "max_width") {
         col = col.max_width(mw);
@@ -70,7 +75,7 @@ pub(crate) fn render_column<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Eleme
 
 pub(crate) fn render_row<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<'a, Message> {
     let props = node.props.as_object();
-    let spacing = prop_f32(props, "spacing").unwrap_or(0.0);
+    let spacing = prop_f32(props, "spacing");
     let padding = parse_padding_value(props);
     let width = prop_length(props, "width", Length::Shrink);
     let height = prop_length(props, "height", Length::Shrink);
@@ -79,13 +84,18 @@ pub(crate) fn render_row<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element<
 
     let children = ctx.render_children(node);
 
-    let r = row(children)
-        .spacing(spacing)
-        .padding(padding)
+    let mut r = row(children)
         .width(width)
         .height(height)
         .align_y(align_y)
         .clip(clip);
+
+    if let Some(s) = spacing {
+        r = r.spacing(s);
+    }
+    if let Some(p) = padding {
+        r = r.padding(p);
+    }
 
     let max_width = prop_f32(props, "max_width");
 
@@ -126,10 +136,13 @@ pub(crate) fn render_container<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> El
         .unwrap_or_else(|| Space::new().into());
 
     let mut c = container(child)
-        .padding(padding)
         .width(width)
         .height(height)
         .clip(clip);
+
+    if let Some(p) = padding {
+        c = c.padding(p);
+    }
 
     if let Some(mw) = prop_f32(props, "max_width") {
         c = c.max_width(mw);
@@ -273,14 +286,18 @@ pub(crate) fn render_grid<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> Element
         .and_then(|p| p.get("columns"))
         .and_then(|v| v.as_u64())
         .unwrap_or(1) as usize;
-    let spacing = prop_f32(props, "spacing").unwrap_or(0.0);
+    let spacing = prop_f32(props, "spacing");
 
     let column_width = prop_length(props, "column_width", Length::Shrink);
     let row_height = prop_length(props, "row_height", Length::Shrink);
 
     let children = ctx.render_children(node);
 
-    let mut g = grid(children).columns(cols).spacing(spacing);
+    let mut g = grid(children).columns(cols);
+
+    if let Some(s) = spacing {
+        g = g.spacing(s);
+    }
 
     // Legacy pixel-only width/height props
     if let Some(w) = prop_f32(props, "width") {
@@ -343,7 +360,7 @@ pub(crate) fn render_keyed_column<'a>(
     ctx: RenderCtx<'a>,
 ) -> Element<'a, Message> {
     let props = node.props.as_object();
-    let spacing = prop_f32(props, "spacing").unwrap_or(0.0);
+    let spacing = prop_f32(props, "spacing");
     let padding = parse_padding_value(props);
     let width = prop_length(props, "width", Length::Shrink);
     let height = prop_length(props, "height", Length::Shrink);
@@ -361,11 +378,14 @@ pub(crate) fn render_keyed_column<'a>(
         .collect();
 
     let mut kc = keyed::Column::with_children(keyed_children);
-    kc = kc
-        .spacing(spacing)
-        .padding(padding)
-        .width(width)
-        .height(height);
+    kc = kc.width(width).height(height);
+
+    if let Some(s) = spacing {
+        kc = kc.spacing(s);
+    }
+    if let Some(p) = padding {
+        kc = kc.padding(p);
+    }
 
     if let Some(mw) = prop_f32(props, "max_width") {
         kc = kc.max_width(mw);

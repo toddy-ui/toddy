@@ -45,8 +45,11 @@ pub(crate) fn render_text_input<'a>(
     let mut ti = text_input(&placeholder, &value)
         .on_input(move |v| Message::Input(id.clone(), v))
         .width(width)
-        .padding(padding)
         .secure(secure);
+
+    if let Some(p) = padding {
+        ti = ti.padding(p);
+    }
 
     if let Some(purpose_str) = prop_str(props, "ime_purpose") {
         let purpose = match purpose_str.as_str() {
@@ -1256,8 +1259,11 @@ pub(crate) fn render_pick_list<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> El
 
     let mut pl = pick_list(selected, options, |v: &String| v.clone())
         .on_select(move |v: String| Message::Select(id.clone(), v))
-        .width(width)
-        .padding(padding);
+        .width(width);
+
+    if let Some(p) = padding {
+        pl = pl.padding(p);
+    }
 
     if let Some(p) = placeholder {
         pl = pl.placeholder(p);
@@ -1376,8 +1382,11 @@ pub(crate) fn render_combo_box<'a>(node: &'a TreeNode, ctx: RenderCtx<'a>) -> El
     let mut cb = combo_box(state, &placeholder, selected.as_ref(), move |selected| {
         Message::Select(id.clone(), selected)
     })
-    .width(width)
-    .padding(padding_val);
+    .width(width);
+
+    if let Some(p) = padding_val {
+        cb = cb.padding(p);
+    }
 
     // on_input: emit Input events so the host can filter
     cb = cb.on_input(move |v| Message::Input(input_id.clone(), v));

@@ -31,11 +31,15 @@ pub(crate) fn value_to_length_opt(val: Option<&Value>) -> Option<Length> {
 // Padding parsing -- handles both number and object formats
 // ---------------------------------------------------------------------------
 
-/// Parse a padding value from props. Handles:
+/// Parse a padding value from props. Returns `None` when no padding is
+/// specified, allowing the caller to skip the `.padding()` call and let
+/// iced use its widget-specific default.
+///
+/// Handles:
 /// - `"padding": 10` -- uniform padding
 /// - `"padding": {"top": 10, "right": 5, "bottom": 10, "left": 5}` -- per-side
 /// - Individual `"padding_top"` etc. keys (legacy)
-pub(crate) fn parse_padding_value(props: Props<'_>) -> Padding {
+pub(crate) fn parse_padding_value(props: Props<'_>) -> Option<Padding> {
     let padding_val = props.and_then(|p| p.get("padding"));
 
     match padding_val {
@@ -64,12 +68,12 @@ pub(crate) fn parse_padding_value(props: Props<'_>) -> Padding {
                 .map(|v| v as f32)
                 .unwrap_or(0.0)
                 .max(0.0);
-            Padding {
+            Some(Padding {
                 top,
                 right,
                 bottom,
                 left,
-            }
+            })
         }
         Some(Value::Number(n)) => {
             let base = n.as_f64().map(|v| v as f32).unwrap_or(0.0).max(0.0);
@@ -78,24 +82,30 @@ pub(crate) fn parse_padding_value(props: Props<'_>) -> Padding {
             let right = prop_f32(props, "padding_right").unwrap_or(base);
             let bottom = prop_f32(props, "padding_bottom").unwrap_or(base);
             let left = prop_f32(props, "padding_left").unwrap_or(base);
-            Padding {
+            Some(Padding {
                 top,
                 right,
                 bottom,
                 left,
-            }
+            })
         }
         _ => {
-            // No padding prop -- check legacy individual keys
-            let top = prop_f32(props, "padding_top").unwrap_or(0.0);
-            let right = prop_f32(props, "padding_right").unwrap_or(0.0);
-            let bottom = prop_f32(props, "padding_bottom").unwrap_or(0.0);
-            let left = prop_f32(props, "padding_left").unwrap_or(0.0);
-            Padding {
-                top,
-                right,
-                bottom,
-                left,
+            // No padding prop -- check legacy individual keys.
+            // If none are present, return None to preserve iced defaults.
+            let top = prop_f32(props, "padding_top");
+            let right = prop_f32(props, "padding_right");
+            let bottom = prop_f32(props, "padding_bottom");
+            let left = prop_f32(props, "padding_left");
+
+            if top.is_some() || right.is_some() || bottom.is_some() || left.is_some() {
+                Some(Padding {
+                    top: top.unwrap_or(0.0),
+                    right: right.unwrap_or(0.0),
+                    bottom: bottom.unwrap_or(0.0),
+                    left: left.unwrap_or(0.0),
+                })
+            } else {
+                None
             }
         }
     }
@@ -1167,7 +1177,7 @@ mod tests {
     #[test]
     fn parse_padding_uniform_number() {
         let v = json!({"padding": 10});
-        let p = parse_padding_value(make_props(&v));
+        let p = parse_padding_value(make_props(&v)).unwrap();
         assert_eq!(p.top, 10.0);
         assert_eq!(p.right, 10.0);
         assert_eq!(p.bottom, 10.0);
@@ -1177,7 +1187,7 @@ mod tests {
     #[test]
     fn parse_padding_per_side_object() {
         let v = json!({"padding": {"top": 1, "right": 2, "bottom": 3, "left": 4}});
-        let p = parse_padding_value(make_props(&v));
+        let p = parse_padding_value(make_props(&v)).unwrap();
         assert_eq!(p.top, 1.0);
         assert_eq!(p.right, 2.0);
         assert_eq!(p.bottom, 3.0);
@@ -1185,13 +1195,9 @@ mod tests {
     }
 
     #[test]
-    fn parse_padding_defaults_to_zero() {
+    fn parse_padding_returns_none_when_absent() {
         let v = json!({});
-        let p = parse_padding_value(make_props(&v));
-        assert_eq!(p.top, 0.0);
-        assert_eq!(p.right, 0.0);
-        assert_eq!(p.bottom, 0.0);
-        assert_eq!(p.left, 0.0);
+        assert!(parse_padding_value(make_props(&v)).is_none());
     }
 
     // -- parse_border --
