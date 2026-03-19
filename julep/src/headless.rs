@@ -351,6 +351,31 @@ impl Session {
                         msg,
                         IncomingMessage::Snapshot { .. } | IncomingMessage::Patch { .. }
                     );
+                    if !is_tree_change {
+                        let msg_type = match &msg {
+                            IncomingMessage::Snapshot { .. } => "snapshot",
+                            IncomingMessage::Patch { .. } => "patch",
+                            IncomingMessage::Query { .. } => "query",
+                            IncomingMessage::Interact { .. } => "interact",
+                            IncomingMessage::Reset { .. } => "reset",
+                            IncomingMessage::Settings { .. } => "settings",
+                            IncomingMessage::Effect { .. } => "effect",
+                            IncomingMessage::WidgetOp { .. } => "widget_op",
+                            IncomingMessage::WindowOp { .. } => "window_op",
+                            IncomingMessage::ImageOp { .. } => "image_op",
+                            IncomingMessage::Subscribe { .. } => "subscribe",
+                            IncomingMessage::Unsubscribe { .. } => "unsubscribe",
+                            IncomingMessage::TreeHash { .. } => "tree_hash",
+                            IncomingMessage::Screenshot { .. } => "screenshot",
+                            IncomingMessage::ExtensionCommand { .. } => "extension_command",
+                            IncomingMessage::ExtensionCommands { .. } => "extension_commands",
+                            IncomingMessage::AdvanceFrame { .. } => "advance_frame",
+                        };
+                        log::warn!(
+                            "interact_step: expected snapshot or patch from host, \
+                             got {msg_type}; tree state may be stale"
+                        );
+                    }
                     let effects = self.core.apply(msg);
                     for effect in effects {
                         use julep_core::engine::CoreEffect;
@@ -478,6 +503,95 @@ impl Session {
                     if let Some(state) = self.core.caches.pane_grid_state(grid_id) {
                         let pane_id = state.get(pane).cloned().unwrap_or_default();
                         events.push(OutgoingEvent::pane_focus_cycle(grid_id.clone(), pane_id));
+                    }
+                }
+                Message::PaneResized(ref grid_id, ref evt) => {
+                    if let Some(state) = self.core.caches.pane_grid_state_mut(grid_id) {
+                        state.resize(evt.split, evt.ratio);
+                    }
+                    events.push(OutgoingEvent::pane_resized(
+                        grid_id.clone(),
+                        format!("{:?}", evt.split),
+                        evt.ratio,
+                    ));
+                }
+                Message::PaneDragged(ref grid_id, ref evt) => {
+                    use iced::widget::pane_grid;
+                    match evt {
+                        pane_grid::DragEvent::Picked { pane } => {
+                            if let Some(state) = self.core.caches.pane_grid_state(grid_id) {
+                                let pane_id = state.get(*pane).cloned().unwrap_or_default();
+                                events.push(OutgoingEvent::pane_dragged(
+                                    grid_id.clone(),
+                                    "picked",
+                                    pane_id,
+                                    None,
+                                    None,
+                                    None,
+                                ));
+                            }
+                        }
+                        pane_grid::DragEvent::Dropped { pane, target } => {
+                            if let Some(state) = self.core.caches.pane_grid_state_mut(grid_id) {
+                                let pane_id = state.get(*pane).cloned().unwrap_or_default();
+                                let (target_pane, region, edge) = match target {
+                                    pane_grid::Target::Edge(e) => {
+                                        let edge_str = match e {
+                                            pane_grid::Edge::Top => "top",
+                                            pane_grid::Edge::Bottom => "bottom",
+                                            pane_grid::Edge::Left => "left",
+                                            pane_grid::Edge::Right => "right",
+                                        };
+                                        (None, None, Some(edge_str))
+                                    }
+                                    pane_grid::Target::Pane(p, region) => {
+                                        let target_id = state.get(*p).cloned().unwrap_or_default();
+                                        let region_str = match region {
+                                            pane_grid::Region::Center => "center",
+                                            pane_grid::Region::Edge(pane_grid::Edge::Top) => "top",
+                                            pane_grid::Region::Edge(pane_grid::Edge::Bottom) => {
+                                                "bottom"
+                                            }
+                                            pane_grid::Region::Edge(pane_grid::Edge::Left) => {
+                                                "left"
+                                            }
+                                            pane_grid::Region::Edge(pane_grid::Edge::Right) => {
+                                                "right"
+                                            }
+                                        };
+                                        (Some(target_id), Some(region_str), None)
+                                    }
+                                };
+                                state.drop(*pane, *target);
+                                events.push(OutgoingEvent::pane_dragged(
+                                    grid_id.clone(),
+                                    "dropped",
+                                    pane_id,
+                                    target_pane,
+                                    region,
+                                    edge,
+                                ));
+                            }
+                        }
+                        pane_grid::DragEvent::Canceled { pane } => {
+                            if let Some(state) = self.core.caches.pane_grid_state(grid_id) {
+                                let pane_id = state.get(*pane).cloned().unwrap_or_default();
+                                events.push(OutgoingEvent::pane_dragged(
+                                    grid_id.clone(),
+                                    "canceled",
+                                    pane_id,
+                                    None,
+                                    None,
+                                    None,
+                                ));
+                            }
+                        }
+                    }
+                }
+                Message::PaneClicked(ref grid_id, pane) => {
+                    if let Some(state) = self.core.caches.pane_grid_state(grid_id) {
+                        let pane_id = state.get(pane).cloned().unwrap_or_default();
+                        events.push(OutgoingEvent::pane_clicked(grid_id.clone(), pane_id));
                     }
                 }
 
@@ -680,7 +794,7 @@ fn handle_message(
             let h = height
                 .unwrap_or(DEFAULT_SCREENSHOT_HEIGHT)
                 .clamp(1, MAX_SCREENSHOT_DIMENSION);
-            handle_screenshot_capture(s, session_id, id, name, w, h)?;
+            handle_screenshot(s, session_id, id, name, w, h)?;
         }
         IncomingMessage::Reset { id } => {
             s.dispatcher.reset(&mut s.ext_caches);
@@ -745,7 +859,7 @@ fn handle_message(
 // Screenshot capture
 // ---------------------------------------------------------------------------
 
-fn handle_screenshot_capture(
+fn handle_screenshot(
     s: &mut Session,
     session_id: &str,
     id: String,
